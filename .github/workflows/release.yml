@@ -1,0 +1,28 @@
+name: Release Validation
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Release Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test Rust workspace
+        run: cargo test --workspace
+      - name: Package Rust crates
+        run: |
+          cargo package -p silta-core --allow-dirty
+          cargo package -p silta-http --allow-dirty
+          cargo package -p silta-router --allow-dirty
+          cargo package -p silta-runtime --allow-dirty
+      - name: Validate Python package metadata
+        run: python -m pip install --upgrade build && python -m build --sdist --wheel

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test workspace
+        run: cargo test --workspace
+
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile package
+        run: python -m compileall python examples
+      - name: Run hello-world example
+        run: PYTHONPATH=python python examples/hello-world/app.py
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate Markdown links
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          root = Path(".")
+          failures = []
+          pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+
+          for path in root.rglob("*.md"):
+              if ".git" in path.parts:
+                  continue
+              for target in pattern.findall(path.read_text(encoding="utf-8")):
+                  if "://" in target or target.startswith("#") or target.startswith("mailto:"):
+                      continue
+                  clean = target.split("#", 1)[0]
+                  if not clean:
+                      continue
+                  resolved = (path.parent / clean).resolve()
+                  if not resolved.exists():
+                      failures.append(f"{path}: broken link: {target}")
+
+          if failures:
+              print("\n".join(failures))
+              sys.exit(1)
+          PY

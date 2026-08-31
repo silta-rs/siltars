@@ -1,0 +1,13 @@
+[package]
+name = "silta-core"
+description = "Core application representation types for Silta."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"

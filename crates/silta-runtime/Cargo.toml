@@ -1,0 +1,17 @@
+[package]
+name = "silta-runtime"
+description = "Runtime orchestration skeleton for Silta."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+silta-core.workspace = true
+silta-router.workspace = true
