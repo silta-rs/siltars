@@ -117,9 +117,9 @@ These are local prototype measurements, not a production performance claim.
 
 ## Current Status
 
-Silta is experimental and under active development.
+Silta is in Technical Preview.
 
-The API is not stable.
+The API is not stable yet.
 
 The architecture is being validated through prototypes and benchmarks. The
 first native runtime prototype serves HTTP, JSON, and PostgreSQL-backed routes
@@ -127,6 +127,18 @@ from Rust modules configured through the Python CLI.
 
 Silta does not yet provide a production server, Python execution bridge, ORM,
 deployment system, authentication, GraphQL, or gRPC support.
+
+## Beta Milestone
+
+Silta should move from Technical Preview to Beta when these criteria are met:
+
+- `pip install silta` installs a wheel with the native runtime artifact.
+- The Python route API is stable enough for early users.
+- Native PostgreSQL CRUD works from Python model definitions.
+- Runtime configuration is documented for local and container deployments.
+- Benchmark runs are reproducible in CI and locally.
+- The project has a small example application that can be cloned, run, and
+  modified without Rust knowledge.
 
 ## Architecture Documents
 

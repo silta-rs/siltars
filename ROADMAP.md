@@ -138,6 +138,22 @@ Python Model definition
 - Source distribution with clear fallback behavior.
 - Installation tests without local Rust toolchain.
 
+## Beta Milestone
+
+Silta should be called Beta only after the project can support early external
+users without requiring Rust knowledge for the standard Python workflow.
+
+Required criteria:
+
+- `pip install silta` installs a platform wheel with the native runtime
+  artifact.
+- The Python route API is stable enough for early users.
+- Native PostgreSQL CRUD works from Python model definitions.
+- Runtime configuration is documented for local and container deployments.
+- Benchmark runs are reproducible in CI and locally.
+- Example applications demonstrate the Python-defined, Rust-executed path.
+- Known limitations are documented clearly.
+
 ## Phase 4: Performance
 
 - Benchmark suite.

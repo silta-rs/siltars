@@ -1,7 +1,7 @@
 # Getting Started
 
-Silta is in bootstrap. These instructions verify the repository and show the
-current Python-facing API shape.
+Silta is in Technical Preview. These instructions verify the repository and
+show the current Python-facing API shape.
 
 ## Requirements
 
@@ -37,8 +37,8 @@ Inspect the example app metadata:
 silta inspect examples/hello-world/app.py:app
 ```
 
-The CLI currently supports metadata inspection only. It does not start the Rust
-runtime yet.
+The CLI supports metadata inspection and can start the first Rust runtime
+prototype when the `silta-runtime` binary is available.
 
 ## Current Python API
 

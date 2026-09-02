@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["backend", "framework", "python", "rust", "runtime"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
