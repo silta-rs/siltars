@@ -3,14 +3,14 @@ requires = ["hatchling>=1.21"]
 build-backend = "hatchling.build"
 
 [project]
-name = "silta"
-version = "0.1.0"
+name = "siltars"
+version = "0.1.0a0"
 description = "A runtime-first backend framework: Python DX, Rust runtime."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 authors = [
-    { name = "Silta contributors" },
+    { name = "Serrka" },
 ]
 keywords = ["backend", "framework", "python", "rust", "runtime"]
 classifiers = [
@@ -18,7 +18,6 @@ classifiers = [
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -29,9 +28,12 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://silta.dev"
 Repository = "https://github.com/silta-rs/siltars"
 Issues = "https://github.com/silta-rs/siltars/issues"
+Author = "https://github.com/Sergey2Gnezdilov/"
+
+[project.scripts]
+silta = "silta.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["python/silta"]
@@ -40,6 +42,8 @@ packages = ["python/silta"]
 include = [
     "/python",
     "/README.md",
-    "/LICENSE-MIT",
-    "/LICENSE-APACHE",
+    "/LICENSE",
+    "/NOTICE",
+    "/LICENSING.md",
+    "/AUTHORS.md",
 ]

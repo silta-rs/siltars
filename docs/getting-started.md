@@ -1,7 +1,7 @@
 # Getting Started
 
-Silta is in bootstrap. These instructions verify the repository and show the
-current Python-facing API shape.
+Silta is Pre-Alpha. These instructions verify the repository and
+show the current Python-facing API shape.
 
 ## Requirements
 
@@ -22,6 +22,23 @@ PYTHONPATH=python python examples/hello-world/app.py
 
 Expected output is a Python dictionary describing the application and its route
 metadata. It is not a running HTTP service.
+
+## Inspect With The CLI
+
+Install the local package:
+
+```bash
+python -m pip install .
+```
+
+Inspect the example app metadata:
+
+```bash
+silta inspect examples/hello-world/app.py:app
+```
+
+The CLI supports metadata inspection and can start the first Rust runtime
+prototype when the `silta-runtime` binary is available.
 
 ## Current Python API
 

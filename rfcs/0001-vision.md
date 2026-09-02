@@ -14,6 +14,9 @@ Python is a convenient way to express an application, Rust is the way to execute
 it efficiently, and Docker/Kubernetes should become a natural final step from
 source code to running microservice.
 
+Silta should not become a thin wrapper around Python infrastructure. The project
+should expose a Python framework surface over native Rust execution modules.
+
 ## Motivation
 
 Python has excellent backend ergonomics, but common infrastructure paths often
@@ -39,6 +42,18 @@ Python API / DSL
 The runtime should avoid Python crossings on the hot path unless user-defined
 business logic requires Python.
 
+The conceptual split is:
+
+```text
+Python control plane
+  -> application definition / IR
+  -> Rust execution plane
+```
+
+The Rust execution plane should eventually include native modules for HTTP,
+routing, middleware, validation, serialization, database access, cache access,
+background jobs, observability, and runtime scheduling.
+
 The exact Python/Rust boundary remains an open architectural question. It must
 be validated through prototypes and benchmarks before the project commits to one
 primary approach.
@@ -63,6 +78,10 @@ The first narrow technical question is:
 If the answer is yes, the project has a useful foundation for ORM, CRUD,
 deployment, and the wider platform. If the answer is no, the project should
 learn that through a small proof of concept before large framework investment.
+
+The first proof should focus on Rust-executed endpoints configured from Python,
+not on making Python ORM calls look convenient while still executing the hot
+path inside Python.
 
 ## POC-001: Validate The Python/Rust Execution Boundary
 
@@ -96,6 +115,10 @@ Required metrics:
 - Startup time.
 
 Do not optimize before measuring.
+
+The success criterion is not only a pleasant Python API. The prototype must
+show that representable API endpoints can be configured from Python and executed
+through native Rust modules.
 
 ## Explicit Non-Goals
 

@@ -58,6 +58,10 @@ Instead of executing every HTTP request inside CPython, Silta should move the
 request pipeline into Rust and enter Python only when custom business logic
 requires it.
 
+Silta should not be a wrapper around Python HTTP, ORM, or serialization
+libraries. It should provide a Python framework surface over native Rust runtime
+modules.
+
 ## Runtime First
 
 Silta is not just another web framework. The runtime is the product. The Python
@@ -157,6 +161,10 @@ Python query expression
 
 This is a long-term architectural direction, not functionality that exists in
 the bootstrap repository.
+
+The ORM is only one native module in the larger runtime system. Python should
+describe models and query intent. Rust should own representable query execution,
+connection pooling, prepared statements, and serialization.
 
 ## Automatic CRUD
 
@@ -330,24 +338,33 @@ runtime-first architecture.
 
 Silta should be developed in public:
 
+- The original project roots and initiator attribution should be preserved.
 - Architecture discussions happen in public.
 - Major decisions go through RFCs.
 - Benchmarks are reproducible.
 - Performance claims are measurable.
-- Licensing is MIT or Apache-2.0, at the user's option.
+- Licensing is Apache-2.0.
+
+Silta was originally conceived and initiated by Serrka.
+
+Original initiator profile: <https://github.com/Sergey2Gnezdilov/>
 
 ## Current Status
 
-Silta is in bootstrap. The current repository contains:
+Silta is Pre-Alpha. The current repository contains:
 
 - A minimal Rust workspace.
 - Initial runtime, route, HTTP, and core crate boundaries.
 - A minimal Python `App` object.
+- A native Rust runtime prototype for HTTP, JSON, Python-produced application
+  definitions, and PostgreSQL-backed benchmark routes.
+- Local benchmark reports comparing Silta and FastAPI as prototype signals.
 - Architecture documentation.
 - Project governance and contribution scaffolding.
 
 It does not yet contain a production Python-to-Rust bridge, ORM, CRUD runtime,
-HTTP server, deployment system, authentication, GraphQL, or gRPC support.
+stable error contract, deployment system, authentication, GraphQL, or gRPC
+support.
 
 ## Mission
 

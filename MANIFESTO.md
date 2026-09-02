@@ -12,6 +12,9 @@ high-performance infrastructure.
 
 Silta connects them.
 
+Silta must not be a thin wrapper around Python infrastructure. It should be a
+Python interface around native Rust execution modules.
+
 ## Python Is The Interface
 
 Silta should feel natural to a Python developer.
@@ -55,6 +58,10 @@ Potential building blocks include:
 Silta is not intended to replace these projects. Silta is intended to connect
 them behind a coherent Python developer experience.
 
+The framework surface should be Python. The execution core should be Rust.
+HTTP, routing, serialization, database access, cache access, background jobs,
+and observability should live inside native runtime modules whenever possible.
+
 ## Keep Python Out Of The Hot Path
 
 The central performance principle is:
@@ -77,6 +84,10 @@ without entering the Python interpreter.
 
 Complex application-specific business logic may explicitly enter Python. After
 that logic completes, execution can return to Rust.
+
+The ORM is one part of this architecture, not the whole architecture. Python
+should describe models and queries. Rust should execute representable database
+operations, prepare statements, manage pools, and serialize responses.
 
 ## Preserve Python Productivity
 
@@ -189,13 +200,24 @@ Silta is designed for efficient high-concurrency backend workloads. The project
 aims to reduce memory consumption and runtime overhead for common Python backend
 workloads. It does not publish performance claims until benchmarks exist.
 
+The first proof must show that Python can configure useful API endpoints while
+HTTP handling, routing, database work, and JSON serialization execute natively
+in Rust.
+
 ## Open Source
 
 Silta is intended to be an open-source project.
 
+The project was originally conceived and initiated by Serge Gnezdilov. The
+community should preserve that origin while growing Silta through public
+technical discussion, forks, RFCs, benchmarks, and contributions.
+
 Architecture discussions should happen publicly. Important architectural changes
 should use RFCs. Performance claims should be reproducible. Benchmarks should be
 public. The project should be welcoming to contributors.
+
+Silta is licensed under Apache-2.0 to support permissive adoption while keeping
+explicit patent terms for contributors and users.
 
 The long-term goal is not to make Python look like Rust. The goal is to let
 Python developers benefit from Rust without having to become Rust developers.

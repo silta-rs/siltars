@@ -6,12 +6,21 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 authors.workspace = true
 
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "silta-runtime"
+path = "src/main.rs"
+
 [dependencies]
+anyhow.workspace = true
+axum = { workspace = true, features = ["http1", "json", "tokio"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 silta-core.workspace = true
 silta-router.workspace = true
+sqlx = { workspace = true, features = ["derive", "postgres", "runtime-tokio", "tls-native-tls"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }

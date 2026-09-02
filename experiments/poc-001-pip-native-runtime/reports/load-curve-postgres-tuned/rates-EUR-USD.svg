@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 720" width="1100" height="720">
+<rect width="100%" height="100%" fill="white"/>
+<style>text{font-family:Arial,sans-serif;font-size:13px;fill:#111827}.axis{stroke:#111827;stroke-width:1}.grid{stroke:#e5e7eb;stroke-width:1}.series{fill:none;stroke-width:2.5}.point{stroke:white;stroke-width:1.5}</style>
+<text x="550.0" y="28" text-anchor="middle" font-size="18" font-weight="700">Response time vs throughput</text>
+<line class="axis" x1="78" y1="56" x2="78" y2="650"/>
+<line class="axis" x1="78" y1="650" x2="1072" y2="650"/>
+<text x="575.0" y="698" text-anchor="middle">Requests/sec</text>
+<text transform="translate(22 353.0) rotate(-90)" text-anchor="middle">p95 response time, ms</text>
+<line class="grid" x1="78" y1="650.0" x2="1072" y2="650.0"/>
+<text x="68" y="654.0" text-anchor="end">0</text>
+<line class="grid" x1="78" y1="531.2" x2="1072" y2="531.2"/>
+<text x="68" y="535.2" text-anchor="end">18</text>
+<line class="grid" x1="78" y1="412.4" x2="1072" y2="412.4"/>
+<text x="68" y="416.4" text-anchor="end">36</text>
+<line class="grid" x1="78" y1="293.6" x2="1072" y2="293.6"/>
+<text x="68" y="297.6" text-anchor="end">55</text>
+<line class="grid" x1="78" y1="174.8" x2="1072" y2="174.8"/>
+<text x="68" y="178.8" text-anchor="end">73</text>
+<line class="grid" x1="78" y1="56.0" x2="1072" y2="56.0"/>
+<text x="68" y="60.0" text-anchor="end">91</text>
+<line class="grid" x1="78.0" y1="56" x2="78.0" y2="650"/>
+<text x="78.0" y="672" text-anchor="middle">0</text>
+<line class="grid" x1="276.8" y1="56" x2="276.8" y2="650"/>
+<text x="276.8" y="672" text-anchor="middle">3,403</text>
+<line class="grid" x1="475.6" y1="56" x2="475.6" y2="650"/>
+<text x="475.6" y="672" text-anchor="middle">6,805</text>
+<line class="grid" x1="674.4" y1="56" x2="674.4" y2="650"/>
+<text x="674.4" y="672" text-anchor="middle">10,208</text>
+<line class="grid" x1="873.2" y1="56" x2="873.2" y2="650"/>
+<text x="873.2" y="672" text-anchor="middle">13,611</text>
+<line class="grid" x1="1072.0" y1="56" x2="1072.0" y2="650"/>
+<text x="1072.0" y="672" text-anchor="middle">17,014</text>
+<circle cx="90" cy="48" r="5" fill="#2563eb"/>
+<text x="100" y="52">Silta</text>
+<circle cx="200" cy="48" r="5" fill="#dc2626"/>
+<text x="210" y="52">FastAPI</text>
+<path class="series" d="M 208.6 646.1 L 583.9 639.0 L 926.9 636.2 L 936.6 612.1 L 974.9 430.9 L 975.6 584.7 L 998.4 484.1" stroke="#2563eb"/>
+<circle class="point" cx="208.6" cy="646.1" r="4" fill="#2563eb"><title>Silta /rates/EUR/USD c=1, rps=2235, p95=0.60ms</title></circle>
+<circle class="point" cx="583.9" cy="639.0" r="4" fill="#2563eb"><title>Silta /rates/EUR/USD c=10, rps=8659, p95=1.69ms</title></circle>
+<circle class="point" cx="926.9" cy="636.2" r="4" fill="#2563eb"><title>Silta /rates/EUR/USD c=25, rps=14530, p95=2.12ms</title></circle>
+<circle class="point" cx="936.6" cy="612.1" r="4" fill="#2563eb"><title>Silta /rates/EUR/USD c=50, rps=14696, p95=5.81ms</title></circle>
+<circle class="point" cx="974.9" cy="430.9" r="4" fill="#2563eb"><title>Silta /rates/EUR/USD c=400, rps=15353, p95=33.57ms</title></circle>
+<circle class="point" cx="975.6" cy="584.7" r="4" fill="#2563eb"><title>Silta /rates/EUR/USD c=100, rps=15363, p95=10.01ms</title></circle>
+<circle class="point" cx="998.4" cy="484.1" r="4" fill="#2563eb"><title>Silta /rates/EUR/USD c=200, rps=15753, p95=25.42ms</title></circle>
+<path class="series" d="M 182.6 645.4 L 520.8 639.7 L 553.3 590.8 L 617.0 631.6 L 719.6 146.6 L 744.5 439.1 L 776.6 553.4" stroke="#dc2626" stroke-dasharray="7 5"/>
+<circle class="point" cx="182.6" cy="645.4" r="4" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=1, rps=1791, p95=0.71ms</title></circle>
+<circle class="point" cx="520.8" cy="639.7" r="4" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=10, rps=7579, p95=1.59ms</title></circle>
+<circle class="point" cx="553.3" cy="590.8" r="4" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=50, rps=8136, p95=9.07ms</title></circle>
+<circle class="point" cx="617.0" cy="631.6" r="4" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=25, rps=9226, p95=2.83ms</title></circle>
+<circle class="point" cx="719.6" cy="146.6" r="4" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=400, rps=10983, p95=77.14ms</title></circle>
+<circle class="point" cx="744.5" cy="439.1" r="4" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=200, rps=11408, p95=32.32ms</title></circle>
+<circle class="point" cx="776.6" cy="553.4" r="4" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=100, rps=11958, p95=14.80ms</title></circle>
+<text x="1072" y="52" text-anchor="end">Endpoints: /rates/EUR/USD</text>
+</svg>
