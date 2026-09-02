@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [
-    { name = "Сергей Гнездилов" },
+    { name = "Serrka" },
 ]
 keywords = ["backend", "framework", "python", "rust", "runtime"]
 classifiers = [
@@ -30,6 +30,7 @@ dependencies = []
 [project.urls]
 Repository = "https://github.com/silta-rs/siltars"
 Issues = "https://github.com/silta-rs/siltars/issues"
+Author = "https://github.com/Sergey2Gnezdilov/"
 
 [project.scripts]
 silta = "silta.cli:main"

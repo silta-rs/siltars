@@ -35,7 +35,9 @@ Silta attribution.
 
 ## Project Roots
 
-The original Silta project was conceived and initiated by Serge Gnezdilov.
+The original Silta project was conceived and initiated by Serrka.
+
+Original initiator profile: <https://github.com/Sergey2Gnezdilov/>.
 
 Official project roots:
 

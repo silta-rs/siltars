@@ -1,7 +1,9 @@
 # Funding
 
-Silta sponsorship currently supports Serge Gnezdilov, the original initiator of
+Silta sponsorship currently supports Serrka, the original initiator of
 the project.
+
+GitHub: <https://github.com/Sergey2Gnezdilov/>
 
 Sponsorship helps fund work on:
 

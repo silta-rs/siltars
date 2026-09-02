@@ -50,7 +50,9 @@ Contributors should not submit code they cannot license under Apache-2.0.
 
 ## Project Origin And Attribution
 
-Silta was originally conceived and initiated by Serge Gnezdilov.
+Silta was originally conceived and initiated by Serrka.
+
+Original initiator profile: <https://github.com/Sergey2Gnezdilov/>
 
 The project includes a `NOTICE` file so the original project roots and initiator
 attribution are preserved in source distributions, forks, and derivative works

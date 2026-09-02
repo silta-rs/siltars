@@ -345,8 +345,9 @@ Silta should be developed in public:
 - Performance claims are measurable.
 - Licensing is Apache-2.0.
 
-Silta was originally conceived and initiated by Сергей Гнездилов
-(Serge Gnezdilov).
+Silta was originally conceived and initiated by Serrka.
+
+Original initiator profile: <https://github.com/Sergey2Gnezdilov/>
 
 ## Current Status
 
