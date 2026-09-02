@@ -2,21 +2,52 @@
 
 > Write Python. Run Rust.
 
-A runtime-first backend framework for Python, powered by a native Rust runtime.
+Silta is a runtime-first backend framework for Python developers, powered by a
+native Rust execution engine.
 
-[Website](https://silta.dev) | [Documentation](docs/README.md) | [RFCs](rfcs/README.md) | [Benchmarks](benchmarks/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
+`silta` means `bridge` in Finnish. That is the project idea: keep the Python
+developer experience on the outside, and move the hot infrastructure path into
+Rust.
 
-## Why?
+```text
+Python developer experience
+        |
+      Silta
+        |
+Rust native runtime
+```
 
-Python is great for building backends.
+[Website](https://silta.dev) | [Documentation](docs/README.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
 
-Rust is great for running them.
+## What Silta Is
 
-Silta connects the two.
+Silta is not a FastAPI wrapper and not an ASGI server.
 
-## Install
+The goal is to let Python developers define backends naturally while the runtime
+executes common infrastructure work natively:
 
-Target experience:
+```text
+HTTP request
+  -> Rust HTTP server
+  -> Rust router
+  -> Rust validation
+  -> Rust database/query adapter
+  -> Rust serialization
+  -> JSON response
+```
+
+Python remains the control plane. Rust is the execution plane.
+
+## Why It Exists
+
+Python is great for backend development speed.
+
+Rust is great for predictable high-concurrency execution.
+
+Silta bridges them without forcing every Python developer to learn Cargo,
+compile Rust, or rewrite their application in Rust.
+
+## Target Install
 
 ```bash
 pip install silta
@@ -25,16 +56,17 @@ pip install silta
 Silta should not require ordinary Python users to install Rust or run Cargo.
 Native Rust runtime artifacts should be distributed through Python wheels.
 
-Current bootstrap CLI:
+Current prototype:
 
 ```bash
 silta inspect examples/hello-world/app.py:app
+silta dev examples/hello-world/app.py:app
 ```
 
 prints the application definition metadata. `silta dev` can start the first
 native Rust runtime prototype when the `silta-runtime` binary is available.
 
-## Proposed API
+## Python Shape
 
 Subject to RFC.
 
@@ -63,7 +95,27 @@ PATCH   /users/{id}
 DELETE  /users/{id}
 ```
 
-## Status
+## Benchmark Snapshot
+
+POC-001 compares the Silta native Rust runtime against FastAPI on the same local
+PostgreSQL container after benchmark tuning.
+
+![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/rates.svg)
+
+Best local points from the current prototype:
+
+| Endpoint | Silta | FastAPI | Signal |
+| --- | ---: | ---: | --- |
+| `/ping` | 133,413 RPS | 48,662 RPS | Lower HTTP/runtime overhead |
+| `/rates/EUR/USD` | 15,753 RPS | 11,958 RPS | Native DB path leads after tuning |
+| `/rates` | 9,652 RPS | 3,873 RPS | Larger JSON response favors Rust serialization |
+
+See the full report in
+[experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/README.md).
+
+These are local prototype measurements, not a production performance claim.
+
+## Current Status
 
 Silta is experimental and under active development.
 
@@ -76,15 +128,15 @@ from Rust modules configured through the Python CLI.
 Silta does not yet provide a production server, Python execution bridge, ORM,
 deployment system, authentication, GraphQL, or gRPC support.
 
-## Benchmark Snapshot
+## Architecture Documents
 
-POC-001 compares the Silta native Rust runtime against FastAPI on the same local
-PostgreSQL container after benchmark tuning.
-
-![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/rates.svg)
-
-See the full report in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/README.md).
+- [ARCHITECTURE.md](ARCHITECTURE.md): system boundaries.
+- [docs/architecture/overview.md](docs/architecture/overview.md): Python
+  control plane and Rust execution plane.
+- [docs/architecture/runtime.md](docs/architecture/runtime.md): runtime
+  ownership.
+- [docs/architecture/database-adapters.md](docs/architecture/database-adapters.md):
+  SQLx, tokio-postgres, Diesel, and Kafka adapter direction.
 
 ## Project Origin
 
