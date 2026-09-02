@@ -1,6 +1,7 @@
 # Authors And Project Origin
 
-Silta was originally conceived and initiated by Serge Gnezdilov.
+Silta was originally conceived and initiated by Сергей Гнездилов
+(Serge Gnezdilov).
 
 Project roots:
 
@@ -12,8 +13,8 @@ Project roots:
 
 ## Original Initiator
 
-Serge Gnezdilov is the original initiator of the Silta project and the source of
-the initial project vision:
+Сергей Гнездилов (Serge Gnezdilov) is the original initiator of the Silta
+project and the source of the initial project vision:
 
 > Write Python. Run Rust.
 

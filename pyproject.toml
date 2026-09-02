@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [
-    { name = "Silta contributors" },
+    { name = "Сергей Гнездилов" },
 ]
 keywords = ["backend", "framework", "python", "rust", "runtime"]
 classifiers = [

@@ -181,7 +181,8 @@ Python remains available as an explicit escape hatch for business logic.
 
 ## Project Origin
 
-Silta was originally conceived and initiated by Serge Gnezdilov.
+Silta was originally conceived and initiated by Сергей Гнездилов
+(Serge Gnezdilov).
 
 See [AUTHORS.md](AUTHORS.md), [NOTICE](NOTICE), and
 [LICENSING.md](LICENSING.md).
