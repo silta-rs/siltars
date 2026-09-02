@@ -108,7 +108,11 @@ Silta should prefer proven Rust crates where appropriate:
 - Async runtime: Tokio.
 - Middleware: Tower and Tower HTTP.
 - Serialization: Serde and serde_json.
-- Database access: SQLx, with SeaORM considered only if the model fits.
+- Database access: SQLx for the first async PostgreSQL path; keep
+  tokio-postgres and Diesel as explicit adapter candidates instead of locking
+  the framework core to one ORM.
+- Streams: native Kafka adapters, likely through librdkafka-backed Rust crates
+  for Confluent-compatible deployments.
 - Observability: tracing and the OpenTelemetry ecosystem.
 
 Each dependency should be chosen deliberately and documented when it becomes

@@ -71,6 +71,31 @@ The Python API can configure these modules, but module internals should be
 Rust-owned. This is the difference between Silta and a Python wrapper around
 existing Python frameworks.
 
+## Data And Stream Adapter Boundary
+
+Silta should not hard-code one ORM as the whole database story. Real projects
+use different SQL databases, different query styles, and different operational
+constraints. The runtime should keep a database adapter boundary with a common
+native execution contract.
+
+For the framework core, the first priority is a fast async driver/query path
+that can be produced from Python metadata and executed natively. `sqlx` is a
+reasonable first PostgreSQL path because it is async, works naturally with
+Tokio, and supports explicit SQL. `tokio-postgres` should remain a candidate for
+lower-level hot paths where less abstraction is useful.
+
+Diesel should be treated as an optional typed ORM integration, not the only
+runtime foundation. It can be valuable for Rust-authored models and strongly
+typed schemas, but the Silta core must still support generated and
+metadata-driven query plans coming from Python definitions.
+
+The same rule applies to stream systems. Kafka should sit behind a native
+runtime adapter boundary. For Confluent-compatible Kafka, the likely Rust path
+is a native client built on `librdkafka` rather than putting a Java client on the
+request hot path. Java-based integrations can exist at the edges, but the Silta
+runtime should keep HTTP, routing, validation, database access, serialization,
+and stream publishing/consuming in native runtime modules whenever practical.
+
 ## Deferred Decisions
 
 - HTTP engine selection and integration model.
@@ -78,7 +103,8 @@ existing Python frameworks.
 - Python boundary strategy.
 - IR format and schema versioning.
 - Native validation and serialization model.
-- Database/query abstraction.
+- Database/query adapter abstraction.
+- Kafka and stream adapter abstraction.
 - Cache and background job boundaries.
 - Observability defaults.
 

@@ -15,4 +15,5 @@ exec .venv/bin/python -m uvicorn baselines.fastapi_db_app:app \
   --host 127.0.0.1 \
   --port "${FASTAPI_PORT:-8103}" \
   --loop uvloop \
-  --http httptools
+  --http httptools \
+  --no-access-log

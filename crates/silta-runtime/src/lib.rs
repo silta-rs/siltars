@@ -123,7 +123,7 @@ impl Runtime {
             Some(database_url) => Some(
                 PgPoolOptions::new()
                     .min_connections(10)
-                    .max_connections(20)
+                    .max_connections(50)
                     .connect(database_url)
                     .await?,
             ),
@@ -184,7 +184,7 @@ async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, Runtim
         r#"
         SELECT rate_type, asset_class, base, quote, rate::text, ts_utc::text, source
         FROM public.rates
-        ORDER BY ts_utc DESC
+        ORDER BY public.rates.ts_utc DESC
         LIMIT 100
         "#,
     )
@@ -205,7 +205,7 @@ async fn get_rate(
         SELECT rate_type, asset_class, base, quote, rate::text, ts_utc::text, source
         FROM public.rates
         WHERE base = $1 AND quote = $2
-        ORDER BY ts_utc DESC
+        ORDER BY public.rates.ts_utc DESC
         LIMIT 1
         "#,
     )
