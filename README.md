@@ -162,12 +162,7 @@ support.
 
 Silta should move from Pre-Alpha to Alpha when these criteria are met:
 
-- `pip install siltars` installs a wheel with the native runtime artifact.
-- The Python route API is stable enough for early users.
-- Native PostgreSQL CRUD works from Python model definitions.
-- Runtime configuration is documented for local and container deployments.
-- Benchmark runs are reproducible in CI and locally.
-- A Rust -> Python -> Rust path is measured and documented.
+See the canonical Alpha checklist in [ROADMAP.md](ROADMAP.md#alpha-milestone).
 - The project has a small example application that can be cloned, run, and
   modified without Rust knowledge.
 

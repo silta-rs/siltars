@@ -152,6 +152,7 @@ Required criteria:
 - Native PostgreSQL CRUD works from Python model definitions.
 - Runtime configuration is documented for local and container deployments.
 - Benchmark runs are reproducible in CI and locally.
+- A Rust -> Python -> Rust path is measured and documented.
 - Example applications demonstrate the Python-defined, Rust-executed path.
 - Known limitations are documented clearly.
 

@@ -12,8 +12,8 @@ The Python distribution name is `siltars`; the import package and CLI are
 pip install siltars
 ```
 
-This package is not published on PyPI yet. The first public release will be a
-Pre-Alpha package and should not be treated as production-ready.
+The first public releases are Pre-Alpha packages and should not be treated as
+production-ready.
 
 ```python
 from silta import App
