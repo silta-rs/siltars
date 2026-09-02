@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 720" width="1100" height="720">
+<rect width="100%" height="100%" fill="white"/>
+<style>text{font-family:Arial,sans-serif;font-size:13px;fill:#111827}.axis{stroke:#111827;stroke-width:1}.grid{stroke:#e5e7eb;stroke-width:1}.series{fill:none;stroke-width:2.5}.point{stroke:white;stroke-width:1.5}</style>
+<text x="550.0" y="28" text-anchor="middle" font-size="18" font-weight="700">Response time vs throughput</text>
+<line class="axis" x1="78" y1="56" x2="78" y2="650"/>
+<line class="axis" x1="78" y1="650" x2="1072" y2="650"/>
+<text x="575.0" y="698" text-anchor="middle">Requests/sec</text>
+<text transform="translate(22 353.0) rotate(-90)" text-anchor="middle">p95 response time, ms</text>
+<line class="grid" x1="78" y1="650.0" x2="1072" y2="650.0"/>
+<text x="68" y="654.0" text-anchor="end">0</text>
+<line class="grid" x1="78" y1="531.2" x2="1072" y2="531.2"/>
+<text x="68" y="535.2" text-anchor="end">8</text>
+<line class="grid" x1="78" y1="412.4" x2="1072" y2="412.4"/>
+<text x="68" y="416.4" text-anchor="end">17</text>
+<line class="grid" x1="78" y1="293.6" x2="1072" y2="293.6"/>
+<text x="68" y="297.6" text-anchor="end">25</text>
+<line class="grid" x1="78" y1="174.8" x2="1072" y2="174.8"/>
+<text x="68" y="178.8" text-anchor="end">34</text>
+<line class="grid" x1="78" y1="56.0" x2="1072" y2="56.0"/>
+<text x="68" y="60.0" text-anchor="end">42</text>
+<line class="grid" x1="78.0" y1="56" x2="78.0" y2="650"/>
+<text x="78.0" y="672" text-anchor="middle">0</text>
+<line class="grid" x1="276.8" y1="56" x2="276.8" y2="650"/>
+<text x="276.8" y="672" text-anchor="middle">28,817</text>
+<line class="grid" x1="475.6" y1="56" x2="475.6" y2="650"/>
+<text x="475.6" y="672" text-anchor="middle">57,635</text>
+<line class="grid" x1="674.4" y1="56" x2="674.4" y2="650"/>
+<text x="674.4" y="672" text-anchor="middle">86,452</text>
+<line class="grid" x1="873.2" y1="56" x2="873.2" y2="650"/>
+<text x="873.2" y="672" text-anchor="middle">115,269</text>
+<line class="grid" x1="1072.0" y1="56" x2="1072.0" y2="650"/>
+<text x="1072.0" y="672" text-anchor="middle">144,086</text>
+<circle cx="90" cy="48" r="5" fill="#2563eb"/>
+<text x="100" y="52">Silta</text>
+<circle cx="200" cy="48" r="5" fill="#dc2626"/>
+<text x="210" y="52">FastAPI</text>
+<path class="series" d="M 251.6 649.1 L 603.2 565.4 L 770.8 607.6 L 774.4 647.9 L 889.1 633.4 L 901.8 645.7 L 998.4 641.6" stroke="#2563eb"/>
+<circle class="point" cx="251.6" cy="649.1" r="4" fill="#2563eb"><title>Silta /ping c=1, rps=25162, p95=0.07ms</title></circle>
+<circle class="point" cx="603.2" cy="565.4" r="4" fill="#2563eb"><title>Silta /ping c=400, rps=76136, p95=6.01ms</title></circle>
+<circle class="point" cx="770.8" cy="607.6" r="4" fill="#2563eb"><title>Silta /ping c=200, rps=100427, p95=3.01ms</title></circle>
+<circle class="point" cx="774.4" cy="647.9" r="4" fill="#2563eb"><title>Silta /ping c=10, rps=100952, p95=0.15ms</title></circle>
+<circle class="point" cx="889.1" cy="633.4" r="4" fill="#2563eb"><title>Silta /ping c=100, rps=117570, p95=1.18ms</title></circle>
+<circle class="point" cx="901.8" cy="645.7" r="4" fill="#2563eb"><title>Silta /ping c=25, rps=119411, p95=0.31ms</title></circle>
+<circle class="point" cx="998.4" cy="641.6" r="4" fill="#2563eb"><title>Silta /ping c=50, rps=133413, p95=0.59ms</title></circle>
+<path class="series" d="M 213.3 648.9 L 339.1 146.6 L 367.2 618.5 L 387.4 597.5 L 403.9 633.8 L 410.3 642.1 L 413.7 646.8" stroke="#dc2626" stroke-dasharray="7 5"/>
+<circle class="point" cx="213.3" cy="648.9" r="4" fill="#dc2626"><title>FastAPI /ping c=1, rps=19609, p95=0.08ms</title></circle>
+<circle class="point" cx="339.1" cy="146.6" r="4" fill="#dc2626"><title>FastAPI /ping c=400, rps=37851, p95=35.76ms</title></circle>
+<circle class="point" cx="367.2" cy="618.5" r="4" fill="#dc2626"><title>FastAPI /ping c=100, rps=41926, p95=2.24ms</title></circle>
+<circle class="point" cx="387.4" cy="597.5" r="4" fill="#dc2626"><title>FastAPI /ping c=200, rps=44853, p95=3.73ms</title></circle>
+<circle class="point" cx="403.9" cy="633.8" r="4" fill="#dc2626"><title>FastAPI /ping c=50, rps=47242, p95=1.15ms</title></circle>
+<circle class="point" cx="410.3" cy="642.1" r="4" fill="#dc2626"><title>FastAPI /ping c=25, rps=48163, p95=0.56ms</title></circle>
+<circle class="point" cx="413.7" cy="646.8" r="4" fill="#dc2626"><title>FastAPI /ping c=10, rps=48662, p95=0.23ms</title></circle>
+<text x="1072" y="52" text-anchor="end">Endpoints: /ping</text>
+</svg>

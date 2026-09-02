@@ -242,10 +242,23 @@ It writes:
 
 - `results/load-curve/load-curve.csv`
 - `results/load-curve/load-curve.svg`
+- endpoint-specific SVG files such as `results/load-curve/rates.svg`
 
 The graph uses requests/sec on the X axis and p95 response time in milliseconds
 on the Y axis. The useful signal is the bend in each line: the point where
 additional throughput causes response time to rise sharply.
+
+For a GitHub-rendered report, write to a committed report directory:
+
+```bash
+python scripts/run_load_curve.py \
+  --requests 5000 \
+  --concurrency 1,10,25,50,100,200,400 \
+  --endpoint /ping \
+  --endpoint /rates/EUR/USD \
+  --endpoint /rates \
+  --output-dir reports/load-curve-postgres-tuned
+```
 
 ## PostgreSQL Tuning
 

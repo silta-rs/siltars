@@ -76,6 +76,11 @@ def main() -> int:
 
     print(f"wrote {csv_path}")
     print(f"wrote {svg_path}")
+    for endpoint in endpoints:
+        endpoint_points = [point for point in points if point.endpoint == endpoint]
+        endpoint_svg_path = args.output_dir / f"{slug(endpoint)}.svg"
+        write_svg(endpoint_svg_path, endpoint_points)
+        print(f"wrote {endpoint_svg_path}")
     return 0
 
 
@@ -151,6 +156,11 @@ def write_csv(path: Path, points: list[Point]) -> None:
         writer.writeheader()
         for point in points:
             writer.writerow(point.__dict__)
+
+
+def slug(value: str) -> str:
+    normalized = value.strip("/").replace("/", "-").replace("_", "-")
+    return normalized or "root"
 
 
 def write_svg(path: Path, points: list[Point]) -> None:
