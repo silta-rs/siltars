@@ -18,6 +18,12 @@ from typing import Any
 from silta import App
 
 
+class _ForwardedSignal(Exception):
+    def __init__(self, signum: int) -> None:
+        super().__init__(signum)
+        self.signum = signum
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="silta",
@@ -155,15 +161,37 @@ def _dev(
     env = os.environ.copy()
     process = subprocess.Popen(command, env=env)
     try:
-        return process.wait()
-    except KeyboardInterrupt:
-        process.send_signal(signal.SIGINT)
-        return process.wait()
+        return _wait_for_child(process)
     finally:
         try:
             Path(definition_path).unlink()
         except FileNotFoundError:
             pass
+
+
+def _wait_for_child(process: subprocess.Popen[Any]) -> int:
+    signal_names = ["SIGINT", "SIGTERM", "SIGHUP"]
+    previous_handlers: dict[int, Any] = {}
+
+    def forward_signal(signum: int, _frame: Any) -> None:
+        if process.poll() is None:
+            process.send_signal(signum)
+        raise _ForwardedSignal(signum)
+
+    for signal_name in signal_names:
+        signum = getattr(signal, signal_name, None)
+        if signum is None:
+            continue
+        previous_handlers[signum] = signal.getsignal(signum)
+        signal.signal(signum, forward_signal)
+
+    try:
+        return process.wait()
+    except _ForwardedSignal:
+        return process.wait()
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
 
 def _find_runtime_binary(explicit: str | None) -> Path | None:

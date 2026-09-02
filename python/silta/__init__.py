@@ -168,6 +168,28 @@ class App:
     def _validate_path(path: str) -> None:
         if not path.startswith("/"):
             raise ValueError("route paths must start with '/'")
+        if "{" not in path and "}" not in path:
+            return
+
+        for segment in path.split("/"):
+            if not segment:
+                continue
+            if "{" not in segment and "}" not in segment:
+                continue
+            if not (segment.startswith("{") and segment.endswith("}")):
+                raise ValueError(
+                    "route parameters must be complete path segments like '{id}'"
+                )
+            parameter_name = segment[1:-1]
+            if (
+                not parameter_name
+                or parameter_name[0].isdigit()
+                or not all(
+                    character == "_" or character.isascii() and character.isalnum()
+                    for character in parameter_name
+                )
+            ):
+                raise ValueError("route parameter names must be valid identifiers")
 
 
 __all__ = ["App", "Route"]

@@ -15,6 +15,13 @@ explicit application definition with route operations, query plans, validation
 rules, and Python escape hatches represented directly instead of inferred from
 function names.
 
+Static native responses are also intentionally minimal in Pre-Alpha. They are
+useful for proving that Python-authored route metadata can become Rust-served
+JSON, but they do not yet validate typed path parameters or inspect request
+bodies. For example, a static `DELETE /users/{id}` route can match a nonnumeric
+`id`, and a static `GET` route ignores any supplied body. That behavior must be
+replaced by explicit validation contracts before Alpha.
+
 The long-term runtime is the Rust execution plane for Silta. Python configures
 and describes it, but the runtime should own high-concurrency request execution
 without routing every operation through the Python interpreter.

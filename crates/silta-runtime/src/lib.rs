@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 use silta_core::{Application, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
+use sqlx::{Connection, PgConnection, PgPool};
 use tokio::net::TcpListener;
 
 /// Errors returned while preparing the runtime.
@@ -34,6 +34,10 @@ pub enum RuntimeError {
     Server(std::io::Error),
     /// The PostgreSQL pool could not be created.
     Database(sqlx::Error),
+    /// The PostgreSQL server rejected or did not accept a connection.
+    DatabaseConnectionRefused(sqlx::Error),
+    /// A route path is malformed.
+    InvalidRoutePath { path: String, reason: String },
 }
 
 impl fmt::Display for RuntimeError {
@@ -43,6 +47,12 @@ impl fmt::Display for RuntimeError {
             Self::Bind(error) => write!(f, "bind error: {error}"),
             Self::Server(error) => write!(f, "server error: {error}"),
             Self::Database(error) => write!(f, "database error: {error}"),
+            Self::DatabaseConnectionRefused(error) => {
+                write!(f, "database connection refused: {error}")
+            }
+            Self::InvalidRoutePath { path, reason } => {
+                write!(f, "invalid route path {path:?}: {reason}")
+            }
         }
     }
 }
@@ -54,6 +64,8 @@ impl Error for RuntimeError {
             Self::Bind(error) => Some(error),
             Self::Server(error) => Some(error),
             Self::Database(error) => Some(error),
+            Self::DatabaseConnectionRefused(error) => Some(error),
+            Self::InvalidRoutePath { .. } => None,
         }
     }
 }
@@ -131,19 +143,12 @@ impl Runtime {
     /// Starts the native HTTP runtime.
     pub async fn serve(self, config: RuntimeConfig) -> Result<(), RuntimeError> {
         let pool = match config.database_url.as_deref() {
-            Some(database_url) => Some(
-                PgPoolOptions::new()
-                    .min_connections(config.db_min_connections)
-                    .max_connections(config.db_max_connections)
-                    .acquire_timeout(config.db_acquire_timeout)
-                    .connect(database_url)
-                    .await?,
-            ),
+            Some(database_url) => Some(create_pool(database_url, &config).await?),
             None => None,
         };
 
         let state = AppState { pool };
-        let app = native_router(&self.application, state);
+        let app = native_router(&self.application, state)?;
         let address = SocketAddr::new(config.host, config.port);
         let listener = TcpListener::bind(address)
             .await
@@ -157,11 +162,11 @@ impl Runtime {
 }
 
 /// Builds the bootstrap native HTTP router from an application description.
-pub fn native_router(application: &Application, state: AppState) -> Router {
+pub fn native_router(application: &Application, state: AppState) -> Result<Router, RuntimeError> {
     let mut routes: BTreeMap<String, MethodRouter<AppState>> = BTreeMap::new();
 
     for route in application.routes() {
-        let path = axum_path(route.path());
+        let path = axum_path(route.path())?;
         let method_router = method_router_for_route(route);
 
         routes
@@ -177,30 +182,135 @@ pub fn native_router(application: &Application, state: AppState) -> Router {
         router = router.route(&path, method_router);
     }
 
-    router.with_state(state)
+    Ok(router.with_state(state))
 }
 
-fn axum_path(path: &str) -> String {
+async fn create_pool(database_url: &str, config: &RuntimeConfig) -> Result<PgPool, RuntimeError> {
+    PgConnection::connect(database_url)
+        .await
+        .map_err(|error| {
+            if is_connection_refused(&error) {
+                RuntimeError::DatabaseConnectionRefused(error)
+            } else {
+                RuntimeError::Database(error)
+            }
+        })?
+        .close()
+        .await
+        .map_err(RuntimeError::Database)?;
+
+    PgPoolOptions::new()
+        .min_connections(config.db_min_connections)
+        .max_connections(config.db_max_connections)
+        .acquire_timeout(config.db_acquire_timeout)
+        .connect(database_url)
+        .await
+        .map_err(RuntimeError::Database)
+}
+
+fn is_connection_refused(error: &sqlx::Error) -> bool {
+    let mut source = error.source();
+    while let Some(error) = source {
+        if let Some(io_error) = error.downcast_ref::<std::io::Error>() {
+            return io_error.kind() == std::io::ErrorKind::ConnectionRefused;
+        }
+        source = error.source();
+    }
+
+    error.to_string().contains("Connection refused")
+}
+
+fn axum_path(path: &str) -> Result<String, RuntimeError> {
+    validate_route_path(path)?;
+
     let mut converted = String::with_capacity(path.len());
     let mut parameter = false;
+    let mut parameter_name = String::new();
 
     for character in path.chars() {
         match character {
             '{' => {
+                if parameter {
+                    return Err(invalid_route_path(path, "nested route parameter"));
+                }
                 parameter = true;
+                parameter_name.clear();
                 converted.push(':');
             }
             '}' => {
+                if !parameter {
+                    return Err(invalid_route_path(
+                        path,
+                        "closing brace without opening brace",
+                    ));
+                }
+                if parameter_name.is_empty()
+                    || !parameter_name
+                        .chars()
+                        .all(|character| character == '_' || character.is_ascii_alphanumeric())
+                    || parameter_name
+                        .chars()
+                        .next()
+                        .is_some_and(|character| character.is_ascii_digit())
+                {
+                    return Err(invalid_route_path(path, "invalid route parameter name"));
+                }
                 parameter = false;
             }
-            _ => converted.push(character),
+            _ => {
+                if parameter {
+                    parameter_name.push(character);
+                }
+                converted.push(character);
+            }
         }
     }
 
     if parameter {
-        path.to_owned()
+        Err(invalid_route_path(path, "unclosed route parameter"))
     } else {
-        converted
+        Ok(converted)
+    }
+}
+
+fn validate_route_path(path: &str) -> Result<(), RuntimeError> {
+    if !path.starts_with('/') {
+        return Err(invalid_route_path(path, "route path must start with '/'"));
+    }
+
+    for segment in path.split('/') {
+        if !segment.contains('{') && !segment.contains('}') {
+            continue;
+        }
+        if !(segment.starts_with('{') && segment.ends_with('}')) {
+            return Err(invalid_route_path(
+                path,
+                "route parameters must be complete path segments",
+            ));
+        }
+        if !is_valid_route_parameter_name(&segment[1..segment.len() - 1]) {
+            return Err(invalid_route_path(path, "invalid route parameter name"));
+        }
+    }
+
+    Ok(())
+}
+
+fn is_valid_route_parameter_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+        && name
+            .chars()
+            .all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn invalid_route_path(path: &str, reason: impl Into<String>) -> RuntimeError {
+    RuntimeError::InvalidRoutePath {
+        path: path.to_owned(),
+        reason: reason.into(),
     }
 }
 
@@ -268,7 +378,7 @@ fn static_json_router(method: Method, response: Value) -> MethodRouter<AppState>
                 async move { Json(response) }
             }
         }),
-        Method::Head => head(move || async move { StatusCode::NO_CONTENT }),
+        Method::Head => head(move || async move { StatusCode::OK }),
     }
 }
 
@@ -589,9 +699,19 @@ mod tests {
     #[test]
     fn axum_path_converts_python_parameters() {
         assert_eq!(
-            super::axum_path("/rates/{base}/{quote}"),
+            super::axum_path("/rates/{base}/{quote}").expect("valid path"),
             "/rates/:base/:quote"
         );
+    }
+
+    #[test]
+    fn axum_path_rejects_unclosed_parameter() {
+        assert!(super::axum_path("/rates/{base").is_err());
+    }
+
+    #[test]
+    fn axum_path_rejects_partial_segment_parameter() {
+        assert!(super::axum_path("/rates/base-{quote}").is_err());
     }
 
     #[test]
