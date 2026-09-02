@@ -23,4 +23,4 @@ serde_json.workspace = true
 silta-core.workspace = true
 silta-router.workspace = true
 sqlx = { workspace = true, features = ["derive", "postgres", "runtime-tokio", "tls-native-tls"] }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync"] }

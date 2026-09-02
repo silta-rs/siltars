@@ -144,6 +144,11 @@ async def create_echo(payload: dict[str, Any] = Body(default_factory=dict)) -> d
     return {"method": "POST", "payload": payload}
 
 
+@app.post("/python/echo")
+async def python_echo(payload: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    return {"bridge": "python", "payload": payload}
+
+
 @app.put("/echo/{item_id}")
 async def replace_echo(
     item_id: int, payload: dict[str, Any] = Body(default_factory=dict)

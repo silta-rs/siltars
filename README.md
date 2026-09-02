@@ -168,6 +168,19 @@ PostgreSQL-backed records per response:
 See the big JSON alpha report in
 [experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha/README.md).
 
+The first Rust -> Python -> Rust bridge smoke test measures a Python handler
+escape hatch behind the Rust HTTP runtime:
+
+![Silta bridge response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-bridge-alpha/POST-python-echo.svg)
+
+| Path | Silta | FastAPI | Signal |
+| --- | ---: | ---: | --- |
+| Native Rust `/echo` | 172,667 RPS | 28,758 RPS | Native Rust request/JSON path overhead |
+| Bridge `/python/echo` | 53,758 RPS | 27,748 RPS | First Rust -> Python -> Rust path is measurable |
+
+See the bridge alpha report in
+[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-bridge-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-bridge-alpha/README.md).
+
 ## Current Status
 
 Silta is Pre-Alpha.
@@ -179,9 +192,9 @@ first native runtime prototype can start an HTTP server, read a Python-produced
 JSON application definition, serve simple native JSON routes, and run
 PostgreSQL-backed benchmark routes in Rust.
 
-Silta does not yet provide a production server, Python execution bridge, ORM,
-stable error contract, deployment system, authentication, GraphQL, or gRPC
-support.
+Silta does not yet provide a production server, production Python execution
+bridge, ORM, stable error contract, deployment system, authentication, GraphQL,
+or gRPC support.
 
 See [docs/status.md](docs/status.md) for the current proven/not-proven state
 and immediate engineering focus.

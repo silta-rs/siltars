@@ -165,7 +165,8 @@ stabilized.
 The next work should stay tightly focused on the claims Silta still has to
 prove:
 
-- Build and measure the Rust -> Python -> Rust business-logic escape hatch.
+- Compare subprocess, PyO3, and worker-pool Rust -> Python -> Rust bridge
+  designs.
 - Bundle the native `silta-runtime` binary into platform wheels.
 - Replace symbolic handler-name mapping with explicit route operation
   declarations.

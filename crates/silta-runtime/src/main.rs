@@ -88,6 +88,18 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
                     .ok_or_else(|| anyhow::anyhow!("--db-acquire-timeout-ms needs a value"))?;
                 config.db_acquire_timeout = Duration::from_millis(value.parse::<u64>()?);
             }
+            "--python-bridge-executable" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--python-bridge-executable needs a value"))?;
+                config.python_bridge_executable = Some(value);
+            }
+            "--python-bridge-target" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--python-bridge-target needs a value"))?;
+                config.python_bridge_target = Some(value);
+            }
             "--definition" => {
                 let value = args
                     .next()
@@ -126,6 +138,8 @@ fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
         .map(|value| value.parse::<u64>().map(Duration::from_millis))
         .transpose()?
         .unwrap_or(config.db_acquire_timeout);
+    config.python_bridge_executable = env::var("SILTA_PYTHON_BRIDGE_EXECUTABLE").ok();
+    config.python_bridge_target = env::var("SILTA_PYTHON_BRIDGE_TARGET").ok();
 
     Ok(config)
 }
@@ -134,6 +148,7 @@ fn print_help() {
     println!(
         "silta-runtime --host 127.0.0.1 --port 8000 [--definition app.json] \
          [--database-url postgresql://...] [--db-min-connections 1] \
-         [--db-max-connections 10]"
+         [--db-max-connections 10] [--python-bridge-executable python] \
+         [--python-bridge-target app.py:app]"
     );
 }

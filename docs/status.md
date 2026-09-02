@@ -15,6 +15,8 @@ numbers are engineering evidence, not production claims.
 - Native PostgreSQL read and write routes work through `sqlx`.
 - Large JSON read responses can be shaped with Rust structs and serialized
   through Serde.
+- A minimal Rust -> Python -> Rust escape hatch exists and has a first local
+  benchmark through a single JSON-lines Python subprocess worker.
 - Local load-curve smoke tests run without request errors in the measured
   scenarios.
 - `silta dev` forwards `SIGINT`, `SIGTERM`, and `SIGHUP` to the child runtime,
@@ -22,8 +24,9 @@ numbers are engineering evidence, not production claims.
 
 ## What Is Not Proven
 
-- The Rust -> Python -> Rust business-logic escape hatch is not implemented or
-  measured yet.
+- The Rust -> Python -> Rust business-logic escape hatch is not production
+  ready. The first subprocess prototype does not yet pass headers, query params,
+  typed path params, or structured errors.
 - The current route-to-native-handler mapping still uses symbolic function
   names as a temporary Pre-Alpha contract.
 - Native wheels do not yet bundle the Rust runtime artifact, so `pip install
@@ -39,8 +42,8 @@ The honest current statement is:
 
 > Silta is a Pre-Alpha experiment for Python-defined, Rust-executed backend
 > services. The current prototype shows the native Rust runtime path and early
-> PostgreSQL/JSON benchmark signal. The Python escape-hatch path and bundled
-> runtime wheels are the next critical milestones.
+> PostgreSQL/JSON benchmark signal. A first Rust -> Python -> Rust subprocess
+> bridge exists, and bundled runtime wheels are the next critical milestone.
 
 Avoid claims such as "Silta is 2.7x faster than FastAPI" until reproducible
 benchmark gates include the Python bridge path, dependency locks, memory,
@@ -48,7 +51,7 @@ startup, CPU, and allocation data.
 
 ## Immediate Engineering Focus
 
-1. Build the smallest Rust -> Python -> Rust route and measure its cost.
+1. Compare the subprocess Python bridge with PyO3 and worker-pool designs.
 2. Bundle the native `silta-runtime` binary into platform wheels.
 3. Replace symbolic handler-name mapping with explicit route operation
    declarations.

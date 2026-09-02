@@ -3,7 +3,7 @@ import subprocess
 import unittest
 from unittest.mock import Mock, patch
 
-from silta.cli import _wait_for_child
+from silta.cli import _AsyncRunner, _handle_bridge_line, _wait_for_child
 
 
 class WaitForChildTests(unittest.TestCase):
@@ -30,6 +30,20 @@ class WaitForChildTests(unittest.TestCase):
         self.assertEqual(result, 0)
         process.send_signal.assert_called_once_with(signal.SIGTERM)
         self.assertIn(signal.SIGTERM, handlers)
+
+
+class BridgeWorkerTests(unittest.TestCase):
+    def test_bridge_line_calls_handler_with_body(self) -> None:
+        def echo(request: dict[str, object]) -> dict[str, object]:
+            return {"payload": request["body"]}
+
+        response = _handle_bridge_line(
+            '{"id":1,"handler":"echo","body":{"ok":true}}',
+            {"echo": echo},
+            _AsyncRunner(),
+        )
+
+        self.assertEqual(response, {"id": 1, "status": 200, "body": {"payload": {"ok": True}}})
 
 
 if __name__ == "__main__":

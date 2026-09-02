@@ -75,6 +75,8 @@ pub struct Route {
     handler: String,
     #[serde(default)]
     native_response: Option<Value>,
+    #[serde(default)]
+    python_handler: bool,
 }
 
 impl Route {
@@ -85,6 +87,7 @@ impl Route {
             path: path.into(),
             handler: handler.into(),
             native_response: None,
+            python_handler: false,
         }
     }
 
@@ -100,6 +103,22 @@ impl Route {
             path: path.into(),
             handler: handler.into(),
             native_response: Some(native_response),
+            python_handler: false,
+        }
+    }
+
+    /// Creates a route description that should execute through the Python bridge.
+    pub fn with_python_handler(
+        method: Method,
+        path: impl Into<String>,
+        handler: impl Into<String>,
+    ) -> Self {
+        Self {
+            method,
+            path: path.into(),
+            handler: handler.into(),
+            native_response: None,
+            python_handler: true,
         }
     }
 
@@ -122,6 +141,11 @@ impl Route {
     pub fn native_response(&self) -> Option<&Value> {
         self.native_response.as_ref()
     }
+
+    /// Returns whether this route should execute through the Python bridge.
+    pub fn python_handler(&self) -> bool {
+        self.python_handler
+    }
 }
 
 #[cfg(test)]
@@ -137,5 +161,13 @@ mod tests {
         assert_eq!(app.routes().len(), 1);
         assert_eq!(app.routes()[0].method().as_str(), "GET");
         assert_eq!(app.routes()[0].path(), "/hello");
+    }
+
+    #[test]
+    fn route_can_mark_python_handler() {
+        let route = Route::with_python_handler(Method::Post, "/echo", "echo");
+
+        assert!(route.python_handler());
+        assert!(route.native_response().is_none());
     }
 }

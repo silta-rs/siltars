@@ -35,6 +35,16 @@ def get_setting():
     return {"id": 1, "name": "alpha", "value": "enabled"}
 
 
+@app.post("/python/echo", python=True)
+def python_echo(request):
+    return {"bridge": "python", "payload": request["body"]}
+
+
+@app.post("/echo")
+def create_echo():
+    return {"method": "POST", "payload": {}}
+
+
 @app.patch("/setting")
 def patch_setting():
     return {"id": 1, "name": "alpha", "value": "patched"}

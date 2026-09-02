@@ -25,6 +25,25 @@ class AppRouteValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "valid identifiers"):
             app.get("/a/{ид}")
 
+    def test_describes_python_handler_route(self) -> None:
+        app = App()
+
+        @app.post("/python/echo", python=True)
+        def echo() -> dict[str, bool]:
+            return {"ok": True}
+
+        route = app.describe()["routes"][0]
+        self.assertEqual(route["method"], "POST")
+        self.assertEqual(route["path"], "/python/echo")
+        self.assertTrue(route["handler"].endswith("echo"))
+        self.assertTrue(route["python_handler"])
+
+    def test_rejects_python_handler_with_native_response(self) -> None:
+        app = App()
+
+        with self.assertRaisesRegex(ValueError, "python routes"):
+            app.get("/hello", response={"hello": "world"}, python=True)
+
 
 if __name__ == "__main__":
     unittest.main()

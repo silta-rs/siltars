@@ -7,21 +7,28 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 
+use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, head, options, patch, post, put, MethodRouter};
 use axum::{Json, Router};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use silta_core::{Application, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Connection, PgConnection, PgPool};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
+use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use tokio::sync::Mutex;
 
 /// Errors returned while preparing the runtime.
 #[derive(Debug)]
@@ -38,6 +45,8 @@ pub enum RuntimeError {
     DatabaseConnectionRefused(sqlx::Error),
     /// A route path is malformed.
     InvalidRoutePath { path: String, reason: String },
+    /// The Python bridge process could not be started.
+    PythonBridge(std::io::Error),
 }
 
 impl fmt::Display for RuntimeError {
@@ -53,6 +62,7 @@ impl fmt::Display for RuntimeError {
             Self::InvalidRoutePath { path, reason } => {
                 write!(f, "invalid route path {path:?}: {reason}")
             }
+            Self::PythonBridge(error) => write!(f, "python bridge error: {error}"),
         }
     }
 }
@@ -66,6 +76,7 @@ impl Error for RuntimeError {
             Self::Database(error) => Some(error),
             Self::DatabaseConnectionRefused(error) => Some(error),
             Self::InvalidRoutePath { .. } => None,
+            Self::PythonBridge(error) => Some(error),
         }
     }
 }
@@ -97,6 +108,10 @@ pub struct RuntimeConfig {
     pub db_max_connections: u32,
     /// Maximum time to wait for a database connection from the pool.
     pub db_acquire_timeout: Duration,
+    /// Python executable used by bridge routes.
+    pub python_bridge_executable: Option<String>,
+    /// Python app target used by bridge routes.
+    pub python_bridge_target: Option<String>,
 }
 
 impl Default for RuntimeConfig {
@@ -108,6 +123,8 @@ impl Default for RuntimeConfig {
             db_min_connections: 1,
             db_max_connections: 10,
             db_acquire_timeout: Duration::from_secs(5),
+            python_bridge_executable: None,
+            python_bridge_target: None,
         }
     }
 }
@@ -147,7 +164,20 @@ impl Runtime {
             None => None,
         };
 
-        let state = AppState { pool };
+        let python_bridge = match (
+            config.python_bridge_executable.as_deref(),
+            config.python_bridge_target.as_deref(),
+        ) {
+            (Some(executable), Some(target)) => {
+                Some(PythonBridge::spawn(executable, target).await?)
+            }
+            _ => None,
+        };
+
+        let state = AppState {
+            pool,
+            python_bridge,
+        };
         let app = native_router(&self.application, state)?;
         let address = SocketAddr::new(config.host, config.port);
         let listener = TcpListener::bind(address)
@@ -318,6 +348,9 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
     if let Some(response) = route.native_response() {
         return static_json_router(route.method(), response.clone());
     }
+    if route.python_handler() {
+        return python_bridge_router(route.method(), route.handler().to_owned());
+    }
 
     match (route.method(), route.handler()) {
         (Method::Get, "ping") => get(ping),
@@ -331,6 +364,36 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
         (Method::Patch, "update_echo") => patch(update_echo),
         (Method::Delete, "delete_echo") => delete(delete_echo),
         (method, _) => not_implemented_router(method),
+    }
+}
+
+fn python_bridge_router(method: Method, handler: String) -> MethodRouter<AppState> {
+    match method {
+        Method::Get => get({
+            let handler = handler.clone();
+            move |state, body| call_python_bridge(handler.clone(), state, body)
+        }),
+        Method::Post => post({
+            let handler = handler.clone();
+            move |state, body| call_python_bridge(handler.clone(), state, body)
+        }),
+        Method::Put => put({
+            let handler = handler.clone();
+            move |state, body| call_python_bridge(handler.clone(), state, body)
+        }),
+        Method::Patch => patch({
+            let handler = handler.clone();
+            move |state, body| call_python_bridge(handler.clone(), state, body)
+        }),
+        Method::Delete => delete({
+            let handler = handler.clone();
+            move |state, body| call_python_bridge(handler.clone(), state, body)
+        }),
+        Method::Options => options({
+            let handler = handler.clone();
+            move |state, body| call_python_bridge(handler.clone(), state, body)
+        }),
+        Method::Head => head(move |state, body| call_python_bridge(handler.clone(), state, body)),
     }
 }
 
@@ -409,6 +472,116 @@ async fn not_implemented_head() -> StatusCode {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pool: Option<PgPool>,
+    python_bridge: Option<PythonBridge>,
+}
+
+#[derive(Debug, Clone)]
+struct PythonBridge {
+    process: Arc<Mutex<PythonBridgeProcess>>,
+}
+
+#[derive(Debug)]
+struct PythonBridgeProcess {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+    next_id: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct PythonBridgeRequest {
+    id: u64,
+    handler: String,
+    body: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct PythonBridgeResponse {
+    id: u64,
+    status: u16,
+    body: Value,
+}
+
+impl PythonBridge {
+    async fn spawn(executable: &str, target: &str) -> Result<Self, RuntimeError> {
+        let mut child = Command::new(executable)
+            .args(["-m", "silta.cli", "_bridge", target])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(RuntimeError::PythonBridge)?;
+
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| RuntimeError::PythonBridge(io_other("missing stdin")))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| RuntimeError::PythonBridge(io_other("missing stdout")))?;
+
+        Ok(Self {
+            process: Arc::new(Mutex::new(PythonBridgeProcess {
+                child,
+                stdin,
+                stdout: BufReader::new(stdout),
+                next_id: 1,
+            })),
+        })
+    }
+
+    async fn call(
+        &self,
+        handler: String,
+        body: Value,
+    ) -> Result<PythonBridgeResponse, RuntimeRouteError> {
+        let mut process = self.process.lock().await;
+        let id = process.next_id;
+        process.next_id += 1;
+
+        let request = PythonBridgeRequest { id, handler, body };
+        let mut line =
+            serde_json::to_vec(&request).map_err(RuntimeRouteError::PythonBridgeSerialize)?;
+        line.push(b'\n');
+        process
+            .stdin
+            .write_all(&line)
+            .await
+            .map_err(RuntimeRouteError::PythonBridgeIo)?;
+        process
+            .stdin
+            .flush()
+            .await
+            .map_err(RuntimeRouteError::PythonBridgeIo)?;
+
+        let mut response_line = String::new();
+        let bytes_read = process
+            .stdout
+            .read_line(&mut response_line)
+            .await
+            .map_err(RuntimeRouteError::PythonBridgeIo)?;
+        if bytes_read == 0 {
+            let _ = process.child.wait().await;
+            return Err(RuntimeRouteError::PythonBridgeClosed);
+        }
+
+        let response = serde_json::from_str::<PythonBridgeResponse>(&response_line)
+            .map_err(RuntimeRouteError::PythonBridgeDeserialize)?;
+        if response.id != id {
+            return Err(RuntimeRouteError::PythonBridgeProtocol(format!(
+                "expected response id {id}, got {}",
+                response.id
+            )));
+        }
+        Ok(response)
+    }
+}
+
+#[allow(clippy::io_other_error)]
+fn io_other(message: &'static str) -> std::io::Error {
+    std::io::Error::new(ErrorKind::Other, message)
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -483,6 +656,27 @@ struct SettingRow {
 
 async fn ping() -> Json<Value> {
     Json(json!({ "ok": true }))
+}
+
+async fn call_python_bridge(
+    handler: String,
+    State(state): State<AppState>,
+    body: Bytes,
+) -> Result<impl IntoResponse, RuntimeRouteError> {
+    let bridge = state
+        .python_bridge
+        .as_ref()
+        .ok_or(RuntimeRouteError::PythonBridgeNotConfigured)?;
+    let body = if body.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&body).map_err(RuntimeRouteError::RequestJson)?
+    };
+    let response = bridge.call(handler, body).await?;
+    let status = StatusCode::from_u16(response.status)
+        .map_err(|error| RuntimeRouteError::PythonBridgeProtocol(error.to_string()))?;
+
+    Ok((status, Json(response.body)))
 }
 
 async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
@@ -649,6 +843,13 @@ impl AppState {
 enum RuntimeRouteError {
     DatabaseNotConfigured,
     Database(sqlx::Error),
+    PythonBridgeNotConfigured,
+    PythonBridgeIo(std::io::Error),
+    PythonBridgeSerialize(serde_json::Error),
+    PythonBridgeDeserialize(serde_json::Error),
+    PythonBridgeProtocol(String),
+    PythonBridgeClosed,
+    RequestJson(serde_json::Error),
 }
 
 impl From<sqlx::Error> for RuntimeRouteError {
@@ -664,9 +865,49 @@ impl IntoResponse for RuntimeRouteError {
                 StatusCode::SERVICE_UNAVAILABLE,
                 "database is not configured for this runtime",
             ),
+            Self::PythonBridgeNotConfigured => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "python bridge is not configured for this runtime",
+            ),
             Self::Database(error) => {
                 eprintln!("silta runtime database query failed: {error}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "database query failed")
+            }
+            Self::PythonBridgeIo(error) => {
+                eprintln!("silta python bridge I/O failed: {error}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "python bridge I/O failed",
+                )
+            }
+            Self::PythonBridgeSerialize(error) => {
+                eprintln!("silta python bridge request serialization failed: {error}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "python bridge request serialization failed",
+                )
+            }
+            Self::PythonBridgeDeserialize(error) => {
+                eprintln!("silta python bridge response deserialization failed: {error}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "python bridge response deserialization failed",
+                )
+            }
+            Self::PythonBridgeProtocol(error) => {
+                eprintln!("silta python bridge protocol failed: {error}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "python bridge protocol failed",
+                )
+            }
+            Self::PythonBridgeClosed => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "python bridge process closed",
+            ),
+            Self::RequestJson(error) => {
+                eprintln!("silta request JSON parsing failed: {error}");
+                (StatusCode::BAD_REQUEST, "request body is not valid JSON")
             }
         };
 

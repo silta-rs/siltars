@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import importlib.util
+import inspect
 import json
 import os
 import signal
@@ -76,6 +77,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Path to the silta-runtime binary. Defaults to SILTA_RUNTIME_BIN or packaged binary.",
     )
 
+    bridge_parser = subparsers.add_parser(
+        "_bridge",
+        help=argparse.SUPPRESS,
+    )
+    bridge_parser.add_argument("target")
+
     args = parser.parse_args(argv)
 
     if args.command == "inspect":
@@ -92,6 +99,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             db_acquire_timeout_ms=args.db_acquire_timeout_ms,
             runtime_bin=args.runtime_bin,
         )
+
+    if args.command == "_bridge":
+        return _bridge(args.target)
 
     parser.error(f"unknown command: {args.command}")
     return 2
@@ -148,6 +158,10 @@ def _dev(
         port,
         "--definition",
         definition_path,
+        "--python-bridge-executable",
+        sys.executable,
+        "--python-bridge-target",
+        target,
     ]
     if database_url is not None:
         command.extend(["--database-url", database_url])
@@ -192,6 +206,62 @@ def _wait_for_child(process: subprocess.Popen[Any]) -> int:
     finally:
         for signum, handler in previous_handlers.items():
             signal.signal(signum, handler)
+
+
+def _bridge(target: str) -> int:
+    try:
+        app = _load_app(target)
+        handlers = {route.handler.__qualname__: route.handler for route in app.routes}
+        asyncio_runner = _AsyncRunner()
+        for line in sys.stdin:
+            response = _handle_bridge_line(line, handlers, asyncio_runner)
+            print(json.dumps(response, separators=(",", ":")), flush=True)
+        return 0
+    except Exception as error:
+        print(f"bridge error: {error}", file=sys.stderr)
+        return 1
+
+
+class _AsyncRunner:
+    def run(self, value: Any) -> Any:
+        if inspect.isawaitable(value):
+            import asyncio
+
+            return asyncio.run(value)
+        return value
+
+
+def _handle_bridge_line(
+    line: str, handlers: dict[str, Any], asyncio_runner: _AsyncRunner
+) -> dict[str, Any]:
+    request = json.loads(line)
+    request_id = request["id"]
+    handler_name = request["handler"]
+    handler = handlers.get(handler_name)
+    if handler is None:
+        return {
+            "id": request_id,
+            "status": 500,
+            "body": {"error": f"python handler not found: {handler_name}"},
+        }
+
+    bridge_request = {
+        "body": request.get("body"),
+    }
+    try:
+        signature = inspect.signature(handler)
+        result = handler(bridge_request) if signature.parameters else handler()
+        return {
+            "id": request_id,
+            "status": 200,
+            "body": asyncio_runner.run(result),
+        }
+    except Exception as error:
+        return {
+            "id": request_id,
+            "status": 500,
+            "body": {"error": str(error)},
+        }
 
 
 def _find_runtime_binary(explicit: str | None) -> Path | None:
