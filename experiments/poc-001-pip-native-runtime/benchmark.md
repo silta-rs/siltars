@@ -106,10 +106,10 @@ python scripts/bench_http.py \
   --output results/fastapi-db-rates.json
 ```
 
-The public reproduction path should use this experiment's Docker Compose file,
-which creates and seeds `public.rates`. The existing local
-`fpcurhub-postgres-1` container can still be used for development-only runs, but
-results from that private container must be labelled as local snapshots.
+The public reproduction path uses this experiment's Docker Compose file, which
+creates and seeds `public.rates`. A private local container can still be used
+for development-only runs through environment overrides, but those results must
+be labelled as local snapshots.
 
 ### Litestar Baseline
 
@@ -188,7 +188,7 @@ claim without repeated, reproducible runs.
 Environment:
 
 - macOS local development machine.
-- Existing Docker PostgreSQL container: `fpcurhub-postgres-1`.
+- Existing private Docker PostgreSQL container.
 - `public.rates`: 26,827 rows at measurement time.
 - PostgreSQL `max_connections`: 20.
 - Benchmark tool: `oha 1.16.0`.
@@ -221,9 +221,9 @@ Interpretation:
 
 ## Load Curves
 
-The committed load-curve report is a local snapshot, not an official benchmark.
-It used 5,000 requests per point and one run per concurrency level. At very high
-RPS, that makes some points too short for public claims.
+The committed load-curve report is a historical local snapshot, not an official
+benchmark. It used 5,000 requests per point and one run per concurrency level.
+At very high RPS, that makes some points too short for public claims.
 
 Before publishing performance claims, rerun the matrix with:
 
@@ -242,7 +242,6 @@ time as throughput increases:
 
 ```bash
 python scripts/run_load_curve.py \
-  --requests 5000 \
   --concurrency 1,5,10,25,50,100,150,200 \
   --endpoint /ping \
   --endpoint /rates/EUR/USD \
@@ -270,7 +269,8 @@ For a GitHub-rendered report, write to a committed report directory:
 
 ```bash
 python scripts/run_load_curve.py \
-  --requests 5000 \
+  --duration 30s \
+  --runs 3 \
   --concurrency 1,10,25,50,100,200,400 \
   --endpoint /ping \
   --endpoint /rates/EUR/USD \
@@ -280,8 +280,8 @@ python scripts/run_load_curve.py \
 
 ## PostgreSQL Tuning
 
-The existing `fpcurhub-postgres-1` container had `max_connections = 20` during
-the first benchmark pass. That is too low for high-concurrency framework
+The first private local PostgreSQL container used during smoke testing had
+`max_connections = 20`. That is too low for high-concurrency framework
 comparison and can make the database, not the framework, the limiting factor.
 
 Inspect the current database limits:

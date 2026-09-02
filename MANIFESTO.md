@@ -208,7 +208,7 @@ in Rust.
 
 Silta is intended to be an open-source project.
 
-The project was originally conceived and initiated by Serge Gnezdilov. The
+The project was originally conceived and initiated by Serrka. The
 community should preserve that origin while growing Silta through public
 technical discussion, forks, RFCs, benchmarks, and contributions.
 

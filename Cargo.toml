@@ -8,7 +8,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.0-alpha.0"
 edition = "2021"
 rust-version = "1.80"
 license = "Apache-2.0"
@@ -16,10 +16,10 @@ repository = "https://github.com/silta-rs/siltars"
 authors = ["Serrka"]
 
 [workspace.dependencies]
-silta-core = { path = "crates/silta-core", version = "0.1.0" }
-silta-http = { path = "crates/silta-http", version = "0.1.0" }
-silta-router = { path = "crates/silta-router", version = "0.1.0" }
-silta-runtime = { path = "crates/silta-runtime", version = "0.1.0" }
+silta-core = { path = "crates/silta-core", version = "0.1.0-alpha.0" }
+silta-http = { path = "crates/silta-http", version = "0.1.0-alpha.0" }
+silta-router = { path = "crates/silta-router", version = "0.1.0-alpha.0" }
+silta-runtime = { path = "crates/silta-runtime", version = "0.1.0-alpha.0" }
 anyhow = "1.0"
 axum = "0.7"
 serde = "1.0"

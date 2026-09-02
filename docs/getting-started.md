@@ -47,11 +47,12 @@ from silta import App
 
 app = App()
 
-@app.get("/hello")
+@app.get("/hello", response={"hello": "world"})
 async def hello():
     return {"hello": "world"}
 ```
 
-The `App` object records declarations that a future runtime boundary can turn
-into an application representation. Silta does not yet expose `Model`, an ORM,
-server startup, or deployment commands.
+The `App` object records declarations that the runtime boundary can turn into
+an application representation. `response=...` marks a simple native JSON route
+for the current Pre-Alpha runtime. Silta does not yet expose `Model`, an ORM, or
+deployment commands.

@@ -76,9 +76,10 @@ access, and stream operations in native modules whenever practical.
 
 ## Operational Finding From POC-001
 
-The local `fpcurhub-postgres-1` container has `max_connections = 20`. This makes
-database pool sizing a first-class runtime concern. A pool that is too large can
-fail under benchmark load even when the SQL plan itself is fast.
+The first private local PostgreSQL container used for smoke testing had
+`max_connections = 20`. That made database pool sizing a first-class runtime
+concern. A pool that is too large can fail under benchmark load even when the
+SQL plan itself is fast.
 
 For local benchmark parity with FastAPI, the POC uses:
 

@@ -30,6 +30,13 @@ The first public package should be published as a pre-release, starting with
 
 6. Test install in a clean virtual environment before announcing the package.
 
+The publish workflows pin `pypa/gh-action-pypi-publish` by commit SHA because
+publishing actions run with package-release authority.
+
+Rust crates are not published to crates.io yet. The release validation workflow
+builds and tests the Rust workspace, but does not package dependent crates until
+the crates.io publication order is designed.
+
 ## Current Scope
 
 The initial package is a Pre-Alpha distribution. It should not claim production

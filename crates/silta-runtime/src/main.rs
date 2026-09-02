@@ -34,7 +34,10 @@ fn native_application() -> Application {
     let mut app = Application::new("silta-native-runtime");
     app.add_route(Route::new(Method::Get, "/ping", "ping"));
     app.add_route(Route::new(Method::Get, "/rates", "list_rates"));
+    app.add_route(Route::new(Method::Get, "/rates/bulk", "list_rates_bulk"));
     app.add_route(Route::new(Method::Get, "/rates/{base}/{quote}", "get_rate"));
+    app.add_route(Route::new(Method::Get, "/setting", "get_setting"));
+    app.add_route(Route::new(Method::Patch, "/setting", "patch_setting"));
     app.add_route(Route::new(Method::Post, "/echo", "create_echo"));
     app.add_route(Route::new(Method::Put, "/echo/{item_id}", "replace_echo"));
     app.add_route(Route::new(Method::Patch, "/echo/{item_id}", "update_echo"));

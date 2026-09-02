@@ -7,7 +7,8 @@ performance claim.
 
 ## Environment
 
-- PostgreSQL container: `fpcurhub-postgres-1`.
+- PostgreSQL container: private local container used before the reproducible
+  compose seed existed.
 - PostgreSQL `max_connections`: `200`.
 - PostgreSQL `shared_buffers`: `512MB`.
 - PostgreSQL `wal_buffers`: `16MB`.

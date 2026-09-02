@@ -14,16 +14,21 @@ from typing import Any
 @dataclass(frozen=True)
 class Target:
     label: str
+    method: str
     endpoint: str
     url: str
+    body: str | None = None
 
 
 @dataclass(frozen=True)
 class Point:
     label: str
+    method: str
     endpoint: str
+    run: int
     concurrency: int
-    requests: int
+    requests: int | None
+    duration: str
     success_rate: float
     rps: float
     average_ms: float
@@ -39,7 +44,18 @@ def main() -> int:
     )
     parser.add_argument("--silta-url", default="http://127.0.0.1:8104")
     parser.add_argument("--fastapi-url", default="http://127.0.0.1:8103")
-    parser.add_argument("--requests", type=int, default=5000)
+    parser.add_argument(
+        "--requests",
+        type=int,
+        default=None,
+        help="Fixed request count for smoke tests. Serious runs should use --duration.",
+    )
+    parser.add_argument(
+        "--duration",
+        default="30s",
+        help="Duration passed to oha -z. Default is 30s.",
+    )
+    parser.add_argument("--runs", type=int, default=3)
     parser.add_argument(
         "--concurrency",
         default="1,5,10,25,50,100,150,200",
@@ -49,25 +65,53 @@ def main() -> int:
         "--endpoint",
         action="append",
         default=[],
-        help="Endpoint path to test. Can be repeated.",
+        help="GET endpoint path to test. Can be repeated.",
+    )
+    parser.add_argument(
+        "--case",
+        action="append",
+        default=[],
+        help='Benchmark case: METHOD PATH [JSON_BODY], for example "PATCH /setting {""value"":""patched""}".',
     )
     parser.add_argument("--output-dir", type=Path, default=Path("results/load-curve"))
     args = parser.parse_args()
 
-    endpoints = args.endpoint or ["/ping", "/rates/EUR/USD", "/rates"]
+    cases = parse_cases(args.case, args.endpoint)
     concurrency_levels = [int(value) for value in args.concurrency.split(",") if value]
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     points: list[Point] = []
-    for endpoint in endpoints:
+    for benchmark_case in cases:
         targets = [
-            Target("Silta", endpoint, f"{args.silta_url}{endpoint}"),
-            Target("FastAPI", endpoint, f"{args.fastapi_url}{endpoint}"),
+            Target(
+                "Silta",
+                benchmark_case.method,
+                benchmark_case.endpoint,
+                f"{args.silta_url}{benchmark_case.endpoint}",
+                benchmark_case.body,
+            ),
+            Target(
+                "FastAPI",
+                benchmark_case.method,
+                benchmark_case.endpoint,
+                f"{args.fastapi_url}{benchmark_case.endpoint}",
+                benchmark_case.body,
+            ),
         ]
         for target in targets:
             for concurrency in concurrency_levels:
-                points.append(run_oha(target, args.requests, concurrency))
-                time.sleep(0.2)
+                for run in range(1, args.runs + 1):
+                    points.append(
+                        run_oha(
+                            target=target,
+                            requests=args.requests,
+                            duration=args.duration,
+                            concurrency=concurrency,
+                            run=run,
+                            raw_output_dir=args.output_dir / "raw",
+                        )
+                    )
+                    time.sleep(0.2)
 
     csv_path = args.output_dir / "load-curve.csv"
     svg_path = args.output_dir / "load-curve.svg"
@@ -76,28 +120,86 @@ def main() -> int:
 
     print(f"wrote {csv_path}")
     print(f"wrote {svg_path}")
-    for endpoint in endpoints:
-        endpoint_points = [point for point in points if point.endpoint == endpoint]
-        endpoint_svg_path = args.output_dir / f"{slug(endpoint)}.svg"
+    for benchmark_case in cases:
+        endpoint_points = [
+            point
+            for point in points
+            if point.method == benchmark_case.method
+            and point.endpoint == benchmark_case.endpoint
+        ]
+        endpoint_svg_path = args.output_dir / (
+            f"{slug(benchmark_case.method)}-{slug(benchmark_case.endpoint)}.svg"
+        )
         write_svg(endpoint_svg_path, endpoint_points)
         print(f"wrote {endpoint_svg_path}")
     return 0
 
 
-def run_oha(target: Target, requests: int, concurrency: int) -> Point:
+@dataclass(frozen=True)
+class BenchmarkCase:
+    method: str
+    endpoint: str
+    body: str | None = None
+
+
+def parse_cases(raw_cases: list[str], endpoints: list[str]) -> list[BenchmarkCase]:
+    if raw_cases:
+        return [parse_case(value) for value in raw_cases]
+
+    selected_endpoints = endpoints or ["/ping", "/rates/EUR/USD", "/rates"]
+    return [BenchmarkCase("GET", endpoint) for endpoint in selected_endpoints]
+
+
+def parse_case(value: str) -> BenchmarkCase:
+    parts = value.split(maxsplit=2)
+    if len(parts) < 2:
+        raise ValueError("--case must use: METHOD PATH [JSON_BODY]")
+
+    method = parts[0].upper()
+    endpoint = parts[1]
+    body = parts[2] if len(parts) == 3 else None
+    if not endpoint.startswith("/"):
+        raise ValueError("--case path must start with '/'")
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}:
+        raise ValueError(f"unsupported method in --case: {method}")
+
+    return BenchmarkCase(method, endpoint, body)
+
+
+def run_oha(
+    *,
+    target: Target,
+    requests: int | None,
+    duration: str,
+    concurrency: int,
+    run: int,
+    raw_output_dir: Path,
+) -> Point:
     command = [
         "oha",
-        "-n",
-        str(requests),
+        "-m",
+        target.method,
         "-c",
         str(concurrency),
         "--no-tui",
         "--output-format",
         "json",
-        target.url,
     ]
+    if requests is None:
+        command.extend(["-z", duration])
+    else:
+        command.extend(["-n", str(requests)])
+    if target.body is not None:
+        command.extend(["-H", "content-type: application/json", "-d", target.body])
+    command.append(target.url)
+
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
     payload = json.loads(completed.stdout)
+    raw_output_dir.mkdir(parents=True, exist_ok=True)
+    raw_path = raw_output_dir / (
+        f"{slug(target.label)}-{slug(target.method)}-{slug(target.endpoint)}-c{concurrency}-run{run}.json"
+    )
+    raw_path.write_text(completed.stdout, encoding="utf-8")
 
     summary = payload.get("summary", payload)
     metrics = payload.get("metrics", {})
@@ -106,9 +208,12 @@ def run_oha(target: Target, requests: int, concurrency: int) -> Point:
 
     return Point(
         label=target.label,
+        method=target.method,
         endpoint=target.endpoint,
+        run=run,
         concurrency=concurrency,
         requests=requests,
+        duration=duration if requests is None else "",
         success_rate=as_float(metrics, "success_rate")
         * 100
         or as_float(summary, "successRate", "success_rate") * 100,
@@ -152,7 +257,11 @@ def percentile_ms(distribution: dict[str, Any], percentile: int) -> float:
 
 def write_csv(path: Path, points: list[Point]) -> None:
     with path.open("w", encoding="utf-8", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=list(Point.__dataclass_fields__))
+        writer = csv.DictWriter(
+            file,
+            fieldnames=list(Point.__dataclass_fields__),
+            lineterminator="\n",
+        )
         writer.writeheader()
         for point in points:
             writer.writerow(point.__dict__)
@@ -183,7 +292,7 @@ def write_svg(path: Path, points: list[Point]) -> None:
         return margin_top + chart_height - (value / max_p95) * chart_height
 
     colors = {"Silta": "#2563eb", "FastAPI": "#dc2626"}
-    endpoints = list(dict.fromkeys(point.endpoint for point in points))
+    endpoints = list(dict.fromkeys(f"{point.method} {point.endpoint}" for point in points))
     labels = ["Silta", "FastAPI"]
 
     lines: list[str] = [
@@ -241,7 +350,9 @@ def write_svg(path: Path, points: list[Point]) -> None:
 
     dash_patterns = {"Silta": "", "FastAPI": " stroke-dasharray=\"7 5\""}
     for endpoint_index, endpoint in enumerate(endpoints):
-        endpoint_points = [point for point in points if point.endpoint == endpoint]
+        endpoint_points = [
+            point for point in points if f"{point.method} {point.endpoint}" == endpoint
+        ]
         for label in labels:
             series = sorted(
                 [point for point in endpoint_points if point.label == label],

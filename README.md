@@ -77,6 +77,17 @@ silta dev examples/hello-world/app.py:app
 prints the application definition metadata. `silta dev` can start the first
 native Rust runtime prototype when the `silta-runtime` binary is available.
 
+The first example route is represented explicitly:
+
+```python
+@app.get("/hello", response={"hello": "world"})
+async def hello():
+    return {"hello": "world"}
+```
+
+`response=...` is serialized into the application definition. Silta does not
+execute the Python handler body during `inspect` or `dev`.
+
 ## Python Shape
 
 Subject to RFC.
@@ -108,29 +119,54 @@ DELETE  /users/{id}
 
 ## Benchmark Snapshot
 
-POC-001 currently contains a local load-curve snapshot of the Silta native Rust
-runtime against a FastAPI baseline on the same local PostgreSQL container after
-benchmark tuning. This is useful engineering signal, not a public performance
-claim.
+POC-001 currently contains a local Python 3.14 smoke/load-curve snapshot of the
+Silta native Rust runtime against a FastAPI baseline on the same reproducible
+PostgreSQL container. This is useful engineering signal, not a public
+performance claim.
 
-![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/rates.svg)
+![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke/rates.svg)
 
 Best local points from the current prototype smoke run:
 
 | Endpoint | Silta | FastAPI | Signal |
 | --- | ---: | ---: | --- |
-| `/ping` | 133,413 RPS | 48,662 RPS | Lower HTTP/runtime overhead |
-| `/rates/EUR/USD` | 15,753 RPS | 11,958 RPS | Native DB path leads after tuning |
-| `/rates` | 9,652 RPS | 3,873 RPS | Larger JSON response favors Rust serialization |
+| `/ping` | 182,345 RPS | 40,878 RPS | Lower HTTP/runtime overhead |
+| `/rates/EUR/USD` | 13,655 RPS | 10,362 RPS | Native DB path leads in this run |
+| `/rates` | 7,023 RPS | 2,899 RPS | Larger JSON response favors Rust serialization |
 
-Important limitations: each point used 5,000 requests, the run was executed
-once, the environment record is incomplete, response bodies are not yet byte-for
-byte identical, and the Python bridge path is not measured yet. The official
-benchmark bar is 30-second runs, repeated three times, with CPU/RSS/startup and
-full dependency versions recorded.
+Important limitations: this fresh graph uses 5-second points and two runs per
+point; response bodies are not yet byte-for-byte identical; and the Python
+bridge path is not measured yet. The official benchmark bar is 30-second runs,
+repeated three times, with CPU/RSS/startup and full dependency versions
+recorded.
 
 See the full report and caveats in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/README.md).
+[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke/README.md).
+
+A separate alpha smoke test reduces the database payload to one PostgreSQL row
+and measures both read and write paths:
+
+![Silta vs FastAPI one-row response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha/load-curve.svg)
+
+| Method | Endpoint | Silta | FastAPI | Signal |
+| --- | --- | ---: | ---: | --- |
+| GET | `/setting` | 15,995 RPS | 12,946 RPS | One-row native read path leads in this run |
+| PATCH | `/setting` | 3,463 RPS | 3,568 RPS | Same-row writes are dominated by PostgreSQL update serialization |
+
+See the one-row alpha report in
+[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha/README.md).
+
+A second alpha smoke test stresses large JSON serialization with 3,000 nested
+PostgreSQL-backed records per response:
+
+![Silta vs FastAPI big JSON response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha/GET-rates-bulk.svg)
+
+| Endpoint | Silta | FastAPI | Signal |
+| --- | ---: | ---: | --- |
+| `/rates/bulk` | 350 RPS | 137 RPS | Large JSON read path favors Rust structs and Serde serialization in this run |
+
+See the big JSON alpha report in
+[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha/README.md).
 
 ## Current Status
 
@@ -151,12 +187,7 @@ support.
 
 Silta should move from Pre-Alpha to Alpha when these criteria are met:
 
-- `pip install siltars` installs a wheel with the native runtime artifact.
-- The Python route API is stable enough for early users.
-- Native PostgreSQL CRUD works from Python model definitions.
-- Runtime configuration is documented for local and container deployments.
-- Benchmark runs are reproducible in CI and locally.
-- A Rust -> Python -> Rust path is measured and documented.
+See the canonical Alpha checklist in [ROADMAP.md](ROADMAP.md#alpha-milestone).
 - The project has a small example application that can be cloned, run, and
   modified without Rust knowledge.
 

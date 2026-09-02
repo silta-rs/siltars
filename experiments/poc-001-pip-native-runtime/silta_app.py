@@ -1,8 +1,4 @@
-"""Proposed Silta POC app.
-
-This file documents the target Python developer experience. It is not expected
-to run until the native runtime prototype implements the CLI/runtime path.
-"""
+"""Silta POC app used by the native Rust runtime experiment."""
 
 from silta import App
 
@@ -14,7 +10,7 @@ def ping():
     return {"ok": True}
 
 
-@app.get("/users")
+@app.get("/users", response={"users": []})
 def list_users():
     return {"users": []}
 
@@ -24,26 +20,44 @@ def list_rates():
     return {"rates": []}
 
 
+@app.get("/rates/bulk")
+def list_rates_bulk():
+    return {"count": 0, "rates": []}
+
+
 @app.get("/rates/{base}/{quote}")
 def get_rate():
     return {"base": "EUR", "quote": "USD", "rate": "1.0"}
 
 
-@app.post("/users")
+@app.get("/setting")
+def get_setting():
+    return {"id": 1, "name": "alpha", "value": "enabled"}
+
+
+@app.patch("/setting")
+def patch_setting():
+    return {"id": 1, "name": "alpha", "value": "patched"}
+
+
+@app.post("/users", response={"id": 1, "name": "Ada", "email": "ada@example.com"})
 def create_user():
     return {"id": 1, "name": "Ada", "email": "ada@example.com"}
 
 
-@app.put("/users/{id}")
+@app.put(
+    "/users/{id}",
+    response={"id": 1, "name": "Ada Lovelace", "email": "ada@example.com"},
+)
 def replace_user():
     return {"id": 1, "name": "Ada Lovelace", "email": "ada@example.com"}
 
 
-@app.patch("/users/{id}")
+@app.patch("/users/{id}", response={"id": 1, "name": "Ada", "email": "ada@example.com"})
 def update_user():
     return {"id": 1, "name": "Ada", "email": "ada@example.com"}
 
 
-@app.delete("/users/{id}")
+@app.delete("/users/{id}", response={"deleted": True})
 def delete_user():
     return {"deleted": True}

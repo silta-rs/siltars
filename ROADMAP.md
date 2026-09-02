@@ -138,10 +138,11 @@ Python Model definition
 - Source distribution with clear fallback behavior.
 - Installation tests without local Rust toolchain.
 
-## Beta Milestone
+## Alpha Milestone
 
-Silta should be called Beta only after the project can support early external
-users without requiring Rust knowledge for the standard Python workflow.
+Silta should be called Alpha only after the project can support early external
+experimentation without requiring Rust knowledge for the standard Python
+workflow.
 
 Required criteria:
 
@@ -151,8 +152,13 @@ Required criteria:
 - Native PostgreSQL CRUD works from Python model definitions.
 - Runtime configuration is documented for local and container deployments.
 - Benchmark runs are reproducible in CI and locally.
+- A Rust -> Python -> Rust path is measured and documented.
 - Example applications demonstrate the Python-defined, Rust-executed path.
 - Known limitations are documented clearly.
+
+Beta should come later, after external users can build small real services on
+the Python-defined, Rust-executed path and the Python bridge/ORM contracts have
+stabilized.
 
 ## Phase 4: Performance
 

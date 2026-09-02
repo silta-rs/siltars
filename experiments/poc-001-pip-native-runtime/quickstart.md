@@ -53,7 +53,13 @@ Expected response:
 {"ok":true}
 ```
 
-Run against the local `fpcurhub-postgres-1` container:
+Start the reproducible PostgreSQL container:
+
+```bash
+docker compose up -d postgres
+```
+
+Run against the local experiment database:
 
 ```bash
 cargo build -p silta-runtime --release
@@ -84,14 +90,15 @@ developer's platform.
 
 ## Baseline Flow
 
-Use the existing local PostgreSQL container:
+Use the experiment PostgreSQL container:
 
 ```bash
-docker ps --filter name=fpcurhub-postgres-1
+docker ps --filter name=silta-poc-postgres
 ```
 
-This experiment reads the existing `public.rates` table. Do not commit local
-database passwords into the repository.
+This experiment reads the seeded `public.rates` table. Do not commit local
+database passwords into the repository. To use a private development database
+instead, set `POSTGRES_CONTAINER`, `POSTGRES_HOST`, and `POSTGRES_PORT`.
 
 Install baseline dependencies:
 
