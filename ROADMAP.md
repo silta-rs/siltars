@@ -160,6 +160,18 @@ Beta should come later, after external users can build small real services on
 the Python-defined, Rust-executed path and the Python bridge/ORM contracts have
 stabilized.
 
+## Immediate Engineering Focus
+
+The next work should stay tightly focused on the claims Silta still has to
+prove:
+
+- Build and measure the Rust -> Python -> Rust business-logic escape hatch.
+- Bundle the native `silta-runtime` binary into platform wheels.
+- Replace symbolic handler-name mapping with explicit route operation
+  declarations.
+- Add RSS, CPU, startup, and allocation measurement to the benchmark reports.
+- Keep public performance language conservative until those gates exist.
+
 ## Phase 4: Performance
 
 - Benchmark suite.

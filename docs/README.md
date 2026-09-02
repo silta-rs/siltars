@@ -6,6 +6,7 @@ agents.
 Start here:
 
 - [Project vision](project.md).
+- [Project status](status.md).
 - [Architecture overview](architecture/overview.md).
 - [Runtime architecture](architecture/runtime.md).
 - [Database and stream adapters](architecture/database-adapters.md).

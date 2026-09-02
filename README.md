@@ -17,7 +17,7 @@ Python developer experience
 Rust native runtime
 ```
 
-[Documentation](docs/README.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
+[Documentation](docs/README.md) | [Status](docs/status.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
 
 ## What Silta Is
 
@@ -182,6 +182,9 @@ PostgreSQL-backed benchmark routes in Rust.
 Silta does not yet provide a production server, Python execution bridge, ORM,
 stable error contract, deployment system, authentication, GraphQL, or gRPC
 support.
+
+See [docs/status.md](docs/status.md) for the current proven/not-proven state
+and immediate engineering focus.
 
 ## Alpha Milestone
 
