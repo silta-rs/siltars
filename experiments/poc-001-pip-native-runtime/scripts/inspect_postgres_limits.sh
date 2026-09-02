@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTAINER_NAME="${POSTGRES_CONTAINER:-fpcurhub-postgres-1}"
+CONTAINER_NAME="${POSTGRES_CONTAINER:-silta-poc-postgres}"
 
 POSTGRES_USER="$(docker exec "$CONTAINER_NAME" printenv POSTGRES_USER)"
 POSTGRES_DB="$(docker exec "$CONTAINER_NAME" printenv POSTGRES_DB)"

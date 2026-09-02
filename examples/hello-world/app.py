@@ -3,7 +3,7 @@ from silta import App
 app = App(name="hello-world")
 
 
-@app.get("/hello")
+@app.get("/hello", response={"hello": "world"})
 async def hello():
     return {"hello": "world"}
 

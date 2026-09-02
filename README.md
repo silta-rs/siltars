@@ -77,6 +77,17 @@ silta dev examples/hello-world/app.py:app
 prints the application definition metadata. `silta dev` can start the first
 native Rust runtime prototype when the `silta-runtime` binary is available.
 
+The first example route is represented explicitly:
+
+```python
+@app.get("/hello", response={"hello": "world"})
+async def hello():
+    return {"hello": "world"}
+```
+
+`response=...` is serialized into the application definition. Silta does not
+execute the Python handler body during `inspect` or `dev`.
+
 ## Python Shape
 
 Subject to RFC.

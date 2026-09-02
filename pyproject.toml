@@ -6,9 +6,13 @@ build-backend = "hatchling.build"
 name = "siltars"
 version = "0.1.0a0"
 description = "A runtime-first backend framework: Python DX, Rust runtime."
-readme = "README.md"
+readme = "PYPI_README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+license-files = [
+    "LICENSE",
+    "NOTICE",
+]
 authors = [
     { name = "Serrka" },
 ]
@@ -41,9 +45,8 @@ packages = ["python/silta"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/python",
-    "/README.md",
+    "/PYPI_README.md",
     "/LICENSE",
     "/NOTICE",
     "/LICENSING.md",
-    "/AUTHORS.md",
 ]

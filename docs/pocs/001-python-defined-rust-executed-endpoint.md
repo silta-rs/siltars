@@ -40,7 +40,7 @@ from silta import App
 app = App()
 
 
-@app.get("/ping", native=True)
+@app.get("/ping", response={"ok": True})
 def ping():
     return {"ok": True}
 ```

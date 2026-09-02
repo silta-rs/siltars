@@ -9,7 +9,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError(
         "DATABASE_URL is required. Use scripts/run_fastapi_rates_baseline.sh "
-        "to read credentials from fpcurhub-postgres-1."
+        "to read credentials from the experiment PostgreSQL container."
     )
 DATABASE_MIN_CONNECTIONS = int(os.environ.get("FASTAPI_DB_MIN_CONNECTIONS", "1"))
 DATABASE_MAX_CONNECTIONS = int(os.environ.get("FASTAPI_DB_MAX_CONNECTIONS", "10"))

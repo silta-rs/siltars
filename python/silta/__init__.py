@@ -7,7 +7,6 @@ not start a server, connect to Rust, or implement persistence yet.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import inspect
 from typing import Any, Callable, Literal, TypeAlias, TypeVar
 
 Handler: TypeAlias = Callable[..., Any]
@@ -42,51 +41,108 @@ class App:
 
         return tuple(self._routes)
 
-    def route(self, method: Method, path: str) -> Callable[[HandlerT], HandlerT]:
+    def route(
+        self,
+        method: Method,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register a handler function as application metadata."""
 
         self._validate_path(path)
+        route_response = native_response if native_response is not None else response
 
         def decorator(handler: HandlerT) -> HandlerT:
-            self._routes.append(Route(method=method, path=path, handler=handler))
+            self._routes.append(
+                Route(
+                    method=method,
+                    path=path,
+                    handler=handler,
+                    native_response=route_response,
+                )
+            )
             return handler
 
         return decorator
 
-    def get(self, path: str) -> Callable[[HandlerT], HandlerT]:
+    def get(
+        self,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register a GET route."""
 
-        return self.route("GET", path)
+        return self.route("GET", path, response=response, native_response=native_response)
 
-    def post(self, path: str) -> Callable[[HandlerT], HandlerT]:
+    def post(
+        self,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register a POST route."""
 
-        return self.route("POST", path)
+        return self.route("POST", path, response=response, native_response=native_response)
 
-    def put(self, path: str) -> Callable[[HandlerT], HandlerT]:
+    def put(
+        self,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register a PUT route."""
 
-        return self.route("PUT", path)
+        return self.route("PUT", path, response=response, native_response=native_response)
 
-    def patch(self, path: str) -> Callable[[HandlerT], HandlerT]:
+    def patch(
+        self,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register a PATCH route."""
 
-        return self.route("PATCH", path)
+        return self.route("PATCH", path, response=response, native_response=native_response)
 
-    def delete(self, path: str) -> Callable[[HandlerT], HandlerT]:
+    def delete(
+        self,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register a DELETE route."""
 
-        return self.route("DELETE", path)
+        return self.route("DELETE", path, response=response, native_response=native_response)
 
-    def options(self, path: str) -> Callable[[HandlerT], HandlerT]:
+    def options(
+        self,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register an OPTIONS route."""
 
-        return self.route("OPTIONS", path)
+        return self.route("OPTIONS", path, response=response, native_response=native_response)
 
-    def head(self, path: str) -> Callable[[HandlerT], HandlerT]:
+    def head(
+        self,
+        path: str,
+        *,
+        response: Any | None = None,
+        native_response: Any | None = None,
+    ) -> Callable[[HandlerT], HandlerT]:
         """Register a HEAD route."""
 
-        return self.route("HEAD", path)
+        return self.route("HEAD", path, response=response, native_response=native_response)
 
     def describe(self) -> dict[str, Any]:
         """Return a serializable description of the current application."""
@@ -106,32 +162,6 @@ class App:
 
         if route.native_response is not None:
             description["native_response"] = route.native_response
-            return description
-
-        signature = inspect.signature(route.handler)
-        required = [
-            parameter
-            for parameter in signature.parameters.values()
-            if parameter.default is inspect.Parameter.empty
-            and parameter.kind
-            in (
-                inspect.Parameter.POSITIONAL_ONLY,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.KEYWORD_ONLY,
-            )
-        ]
-        if required or inspect.iscoroutinefunction(route.handler):
-            return description
-
-        try:
-            response = route.handler()
-        except Exception:
-            return description
-
-        if inspect.isawaitable(response):
-            return description
-
-        description["native_response"] = response
         return description
 
     @staticmethod

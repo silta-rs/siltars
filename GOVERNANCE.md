@@ -2,7 +2,7 @@
 
 Silta is an open-source project.
 
-Silta was originally conceived and initiated by Serge Gnezdilov.
+Silta was originally conceived and initiated by Serrka.
 
 The project is initially maintained by the founding maintainers.
 

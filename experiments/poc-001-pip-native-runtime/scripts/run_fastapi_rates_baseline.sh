@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 set -eu
 
-container="${SILTA_POSTGRES_CONTAINER:-fpcurhub-postgres-1}"
+container="${SILTA_POSTGRES_CONTAINER:-silta-poc-postgres}"
 host="${SILTA_POSTGRES_HOST:-127.0.0.1}"
-port="${SILTA_POSTGRES_PORT:-5432}"
+port="${SILTA_POSTGRES_PORT:-55432}"
 
 pg_user="$(docker exec "$container" printenv POSTGRES_USER)"
 pg_password="$(docker exec "$container" printenv POSTGRES_PASSWORD)"

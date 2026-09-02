@@ -22,8 +22,10 @@ class Target:
 class Point:
     label: str
     endpoint: str
+    run: int
     concurrency: int
-    requests: int
+    requests: int | None
+    duration: str
     success_rate: float
     rps: float
     average_ms: float
@@ -39,7 +41,18 @@ def main() -> int:
     )
     parser.add_argument("--silta-url", default="http://127.0.0.1:8104")
     parser.add_argument("--fastapi-url", default="http://127.0.0.1:8103")
-    parser.add_argument("--requests", type=int, default=5000)
+    parser.add_argument(
+        "--requests",
+        type=int,
+        default=None,
+        help="Fixed request count for smoke tests. Serious runs should use --duration.",
+    )
+    parser.add_argument(
+        "--duration",
+        default="30s",
+        help="Duration passed to oha -z. Default is 30s.",
+    )
+    parser.add_argument("--runs", type=int, default=3)
     parser.add_argument(
         "--concurrency",
         default="1,5,10,25,50,100,150,200",
@@ -66,8 +79,18 @@ def main() -> int:
         ]
         for target in targets:
             for concurrency in concurrency_levels:
-                points.append(run_oha(target, args.requests, concurrency))
-                time.sleep(0.2)
+                for run in range(1, args.runs + 1):
+                    points.append(
+                        run_oha(
+                            target=target,
+                            requests=args.requests,
+                            duration=args.duration,
+                            concurrency=concurrency,
+                            run=run,
+                            raw_output_dir=args.output_dir / "raw",
+                        )
+                    )
+                    time.sleep(0.2)
 
     csv_path = args.output_dir / "load-curve.csv"
     svg_path = args.output_dir / "load-curve.svg"
@@ -84,20 +107,36 @@ def main() -> int:
     return 0
 
 
-def run_oha(target: Target, requests: int, concurrency: int) -> Point:
+def run_oha(
+    *,
+    target: Target,
+    requests: int | None,
+    duration: str,
+    concurrency: int,
+    run: int,
+    raw_output_dir: Path,
+) -> Point:
     command = [
         "oha",
-        "-n",
-        str(requests),
         "-c",
         str(concurrency),
         "--no-tui",
         "--output-format",
         "json",
-        target.url,
     ]
+    if requests is None:
+        command.extend(["-z", duration])
+    else:
+        command.extend(["-n", str(requests)])
+    command.append(target.url)
+
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
     payload = json.loads(completed.stdout)
+    raw_output_dir.mkdir(parents=True, exist_ok=True)
+    raw_path = raw_output_dir / (
+        f"{slug(target.label)}-{slug(target.endpoint)}-c{concurrency}-run{run}.json"
+    )
+    raw_path.write_text(completed.stdout, encoding="utf-8")
 
     summary = payload.get("summary", payload)
     metrics = payload.get("metrics", {})
@@ -107,8 +146,10 @@ def run_oha(target: Target, requests: int, concurrency: int) -> Point:
     return Point(
         label=target.label,
         endpoint=target.endpoint,
+        run=run,
         concurrency=concurrency,
         requests=requests,
+        duration=duration if requests is None else "",
         success_rate=as_float(metrics, "success_rate")
         * 100
         or as_float(summary, "successRate", "success_rate") * 100,
