@@ -56,6 +56,36 @@ class App:
 
         return self.route("GET", path)
 
+    def post(self, path: str) -> Callable[[HandlerT], HandlerT]:
+        """Register a POST route."""
+
+        return self.route("POST", path)
+
+    def put(self, path: str) -> Callable[[HandlerT], HandlerT]:
+        """Register a PUT route."""
+
+        return self.route("PUT", path)
+
+    def patch(self, path: str) -> Callable[[HandlerT], HandlerT]:
+        """Register a PATCH route."""
+
+        return self.route("PATCH", path)
+
+    def delete(self, path: str) -> Callable[[HandlerT], HandlerT]:
+        """Register a DELETE route."""
+
+        return self.route("DELETE", path)
+
+    def options(self, path: str) -> Callable[[HandlerT], HandlerT]:
+        """Register an OPTIONS route."""
+
+        return self.route("OPTIONS", path)
+
+    def head(self, path: str) -> Callable[[HandlerT], HandlerT]:
+        """Register a HEAD route."""
+
+        return self.route("HEAD", path)
+
     def describe(self) -> dict[str, Any]:
         """Return a serializable description of the current application."""
 

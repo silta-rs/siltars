@@ -2,6 +2,8 @@
 
 Silta is an open-source project.
 
+Silta was originally conceived and initiated by Serge Gnezdilov.
+
 The project is initially maintained by the founding maintainers.
 
 As the community grows, maintainership should become increasingly
@@ -10,6 +12,9 @@ community-driven.
 Technical decisions should be made in public whenever practical.
 
 Major architectural decisions should use RFCs.
+
+Sponsorship supports project development but does not grant control over the
+technical roadmap.
 
 ## Maintainer Responsibilities
 

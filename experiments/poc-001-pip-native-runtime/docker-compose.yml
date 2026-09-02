@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: silta-poc-postgres
+    environment:
+      POSTGRES_DB: silta_poc
+      POSTGRES_USER: silta
+      POSTGRES_PASSWORD: silta
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silta -d silta_poc"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

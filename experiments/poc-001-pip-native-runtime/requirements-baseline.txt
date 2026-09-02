@@ -1,0 +1,4 @@
+asyncpg
+fastapi
+litestar
+uvicorn[standard]

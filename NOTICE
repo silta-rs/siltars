@@ -1,0 +1,18 @@
+Silta
+
+Copyright 2026 Serge Gnezdilov and Silta contributors
+
+Silta was originally conceived and initiated by Serge Gnezdilov.
+
+Project roots:
+
+- Project: Silta
+- GitHub organization: https://github.com/silta-rs
+- Website: https://silta.dev
+- Initial repository: https://github.com/silta-rs/siltars
+
+Silta is a runtime-first backend platform for Python, powered by a native Rust
+runtime.
+
+This product includes software developed by the Silta project and its
+contributors.

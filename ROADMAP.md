@@ -52,6 +52,10 @@ developer can define a useful backend service with minimal code while the common
 request path executes primarily in Rust, with measurably lower runtime overhead
 than a conventional Python stack.
 
+The MVP should prove Silta is not a wrapper around Python HTTP or ORM code.
+Python should describe the service. Native Rust modules should execute the
+representable request path.
+
 ## Phase 0: Foundation
 
 - Repository.
@@ -75,6 +79,19 @@ primarily in Rust.
 - Basic Python bridge.
 - JSON responses.
 - Basic configuration.
+- Native endpoint configured from Python.
+- Explicit Rust-only versus Rust-Python-Rust benchmark paths.
+- Local developer launch through Python package commands.
+
+First prototype target:
+
+```text
+Python App definition
+  -> Silta Bridge / IR
+  -> Rust HTTP module
+  -> Rust router module
+  -> Rust JSON response
+```
 
 ## Phase 2: Database
 
@@ -85,6 +102,18 @@ primarily in Rust.
 - CRUD.
 - Migrations.
 - Transactions.
+- Native Rust execution for representable ORM/query operations.
+
+Database prototype target:
+
+```text
+Python Model definition
+  -> query/application representation
+  -> Rust database/query module
+  -> PostgreSQL
+  -> Rust serialization
+  -> JSON
+```
 
 ## Phase 3: Production API
 
@@ -95,6 +124,19 @@ primarily in Rust.
 - Authorization.
 - Structured errors.
 - Health checks.
+- Python-facing runtime errors.
+- CLI entry point.
+
+## Phase 3.5: Distribution
+
+- Prebuilt Python wheels.
+- Bundled native Rust runtime artifact.
+- Linux x86_64 wheel.
+- Linux aarch64 wheel.
+- macOS arm64 wheel.
+- macOS x86_64 wheel.
+- Source distribution with clear fallback behavior.
+- Installation tests without local Rust toolchain.
 
 ## Phase 4: Performance
 
@@ -166,3 +208,8 @@ The following are future integrations, not initial implementation scope:
 The next technical stage is:
 
 > Build the smallest possible Silta runtime prototype.
+
+Start with [POC-001: Python-defined, Rust-executed endpoint](docs/pocs/001-python-defined-rust-executed-endpoint.md).
+
+The corresponding experiment folder is
+[experiments/poc-001-pip-native-runtime](experiments/poc-001-pip-native-runtime/README.md).

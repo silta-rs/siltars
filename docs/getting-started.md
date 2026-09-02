@@ -23,6 +23,23 @@ PYTHONPATH=python python examples/hello-world/app.py
 Expected output is a Python dictionary describing the application and its route
 metadata. It is not a running HTTP service.
 
+## Inspect With The CLI
+
+Install the local package:
+
+```bash
+python -m pip install .
+```
+
+Inspect the example app metadata:
+
+```bash
+silta inspect examples/hello-world/app.py:app
+```
+
+The CLI currently supports metadata inspection only. It does not start the Rust
+runtime yet.
+
 ## Current Python API
 
 ```python

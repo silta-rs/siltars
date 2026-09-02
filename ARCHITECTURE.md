@@ -9,6 +9,9 @@ Silta's architecture is based on a simple separation:
 - Rust executes the runtime.
 - The bridge turns application definitions into runtime-ready representation.
 
+Silta must not become a thin wrapper around Python infrastructure. The intended
+model is a Python control plane around native Rust execution modules.
+
 ## System Boundary
 
 ```text
@@ -37,6 +40,68 @@ Rust Runtime
 
 The exact Python/Rust boundary is an open architectural question and must be
 validated through benchmarks and prototypes.
+
+## Control Plane And Execution Plane
+
+Silta has two distinct planes:
+
+- Python control plane.
+- Rust execution plane.
+
+The Python control plane owns the developer-facing interface. It describes
+services, routes, models, configuration, policies, and custom business logic.
+It should feel like ordinary async Python code.
+
+The Rust execution plane owns the operational work. HTTP handling, routing,
+validation, serialization, database access, cache access, background execution,
+and observability should run in native Rust modules whenever they can be
+represented from the application definition.
+
+Python should configure and describe many Rust execution modules. It should not
+coordinate every request, schedule every task, generate SQL per request, or
+serialize every JSON response on the hot path.
+
+```text
+Python framework surface
+ +-----------------------------------------------------------+
+ | App, Model, routes, configuration, policies, user logic    |
+ +-----------------------------------------------------------+
+                              |
+                              v
+                       Silta Bridge / IR
+                              |
+                              v
+Rust runtime modules
+ +-----------------------------------------------------------+
+ | HTTP | Router | Validation | ORM/Query | Serde | Jobs     |
+ | Cache | Middleware | Observability | Runtime Scheduling   |
+ +-----------------------------------------------------------+
+```
+
+This is the source of the performance opportunity: Python remains the language
+of expression, while Rust modules perform the high-concurrency execution work.
+The design should allow many native runtime paths to run concurrently without
+being serialized through the Python interpreter or GIL.
+
+## Installation Boundary
+
+Silta must be usable by Python developers through Python packaging.
+
+The intended installation experience is:
+
+```bash
+pip install silta
+```
+
+A normal user should not need to install Rust, run Cargo, compile native
+extensions manually, or understand Rust build tooling. Rust should be delivered
+as prebuilt native artifacts inside platform-specific Python wheels.
+
+The package should expose a Python API and, eventually, a `silta` CLI. That CLI
+may start or configure the Rust runtime, but it should not turn Python into the
+hot-path request scheduler.
+
+See `docs/architecture/distribution.md`.
 
 ## Layer Responsibilities
 
@@ -109,9 +174,28 @@ Runtime responsibilities include:
 - Cache access.
 - Background job orchestration.
 - Observability.
+- Native runtime scheduling and concurrency.
 
 The runtime should integrate proven Rust ecosystem components where appropriate.
 This document deliberately does not select those components.
+
+### Native Module Boundary
+
+Runtime capabilities should be modeled as native modules with explicit
+interfaces. Examples include:
+
+- HTTP module.
+- Router module.
+- Validation module.
+- Serialization module.
+- Database/query module.
+- Cache module.
+- Background jobs module.
+- Observability module.
+
+The Python API may expose simple methods for configuring these modules, but the
+module internals should remain Rust-owned. This keeps the framework from
+becoming a Python facade over Python implementations.
 
 ## Hot Path Principle
 
@@ -140,6 +224,31 @@ HTTP
 The architecture should avoid designs where every request repeatedly crosses the
 Python/Rust boundary for routing, validation, serialization, or database access.
 
+For CRUD-style requests, the target path is:
+
+```text
+HTTP
+  -> Rust HTTP module
+  -> Rust router module
+  -> Rust validation module
+  -> Rust database/query module
+  -> Rust serialization module
+  -> JSON response
+```
+
+For custom business logic, the target path is:
+
+```text
+HTTP
+  -> Rust HTTP/router/validation modules
+  -> Python business logic
+  -> Rust serialization/observability modules
+  -> JSON response
+```
+
+The second mode exists for expressiveness. The first mode is the core
+architectural advantage Silta must prove.
+
 Performance should be a property of the architecture, not a collection of
 optional optimizations. The common case should require very little
 configuration. Advanced behavior should remain accessible.
@@ -163,6 +272,7 @@ Kubernetes, and OpenAPI artifacts should remain inspectable and customizable.
 - Application declaration ergonomics.
 - Business logic authored by users.
 - Error messages that point back to Python source.
+- Control-plane configuration of native Rust runtime modules.
 
 ### Bridge Owns
 
@@ -179,6 +289,8 @@ Kubernetes, and OpenAPI artifacts should remain inspectable and customizable.
 - Native validation and serialization paths.
 - Runtime observability.
 - Production execution behavior.
+- Database/query execution for representable ORM operations.
+- Native concurrency and scheduling.
 
 ## Current Bootstrap Mapping
 

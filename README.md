@@ -4,7 +4,7 @@
 
 A runtime-first backend framework for Python, powered by a native Rust runtime.
 
-[Website](https://silta.dev) | [Documentation](docs/README.md) | [RFCs](rfcs/README.md) | [Benchmarks](benchmarks/README.md)
+[Website](https://silta.dev) | [Documentation](docs/README.md) | [RFCs](rfcs/README.md) | [Benchmarks](benchmarks/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
 
 ## Why?
 
@@ -13,6 +13,26 @@ Python is great for building backends.
 Rust is great for running them.
 
 Silta connects the two.
+
+## Install
+
+Target experience:
+
+```bash
+pip install silta
+```
+
+Silta should not require ordinary Python users to install Rust or run Cargo.
+Native Rust runtime artifacts should be distributed through Python wheels.
+
+Current bootstrap CLI:
+
+```bash
+silta inspect examples/hello-world/app.py:app
+```
+
+prints the application definition metadata. `silta dev` is intentionally not
+implemented until the Rust runtime prototype exists.
 
 ## Proposed API
 
@@ -54,11 +74,15 @@ The architecture is being validated through prototypes and benchmarks.
 Silta does not yet provide a production server, Python execution bridge, ORM,
 deployment system, authentication, GraphQL, or gRPC support.
 
+## Project Origin
+
+Silta was originally conceived and initiated by Serge Gnezdilov.
+
+See [AUTHORS.md](AUTHORS.md), [NOTICE](NOTICE), and
+[LICENSING.md](LICENSING.md).
+
 ## License
 
-Licensed under either:
+Licensed under:
 
 - Apache License 2.0
-- MIT License
-
-at your option.

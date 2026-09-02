@@ -15,6 +15,15 @@ Python should describe the application. Rust should execute infrastructure.
 Crossing between Python and Rust on the hot path should be avoided unless the
 request needs Python business logic.
 
+The boundary should support a Python control plane around native Rust execution
+modules. Python should configure HTTP, routing, validation, database/query,
+serialization, cache, background jobs, and observability behavior. Rust should
+execute those modules directly whenever the work can be represented.
+
+Silta should not call Python on every request merely to delegate to Rust helper
+functions. That would preserve Python as the hot-path scheduler and limit the
+architecture's concurrency and memory advantages.
+
 ## Options
 
 ### A. PyO3 Extension Module
@@ -105,6 +114,9 @@ Tradeoffs:
 - Developer experience: strong if generation is transparent and errors point to
   Python source.
 
+This option best matches the native-module goal for representable CRUD and REST
+paths, but it still needs a separate strategy for custom Python business logic.
+
 ### E. Hybrid Architecture
 
 Silta may combine the above: Python declares an application, a generated IR
@@ -128,6 +140,10 @@ Tradeoffs:
 - Developer experience: strongest long-term option if complexity is hidden
   behind a simple Python API.
 
+This is the most likely long-term shape if prototypes prove that native module
+execution can be configured from Python while preserving a good developer
+experience.
+
 ## Current Bootstrap Position
 
 The repository does not choose a final boundary yet.
@@ -143,6 +159,8 @@ Any boundary design should be evaluated against:
 
 - Number of Python-to-Rust crossings per request.
 - Ability to keep routing, middleware, validation, and serialization native.
+- Ability to keep representable database/query work native.
+- Whether Python remains a control plane or becomes the hot-path scheduler.
 - Startup time in local development and production.
 - Memory footprint under concurrent load.
 - Packaging across Linux, macOS, and common container environments.

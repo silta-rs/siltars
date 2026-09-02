@@ -42,6 +42,9 @@ Initial scenarios should include:
 - Memory under load.
 - Container startup.
 
+The first concrete benchmark plan is documented in
+[experiments/poc-001-pip-native-runtime/benchmark.md](../experiments/poc-001-pip-native-runtime/benchmark.md).
+
 ## Metrics
 
 Benchmarks should report:
