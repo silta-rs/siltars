@@ -216,3 +216,79 @@ Interpretation:
 - PostgreSQL pool sizing is a hard local bottleneck. The local container has
   only 20 allowed connections; setting the runtime pool too high causes
   connection starvation and 500 responses from pool acquire timeout.
+
+## Load Curves
+
+To understand where FastAPI starts degrading faster than Silta, measure response
+time as throughput increases:
+
+```bash
+python scripts/run_load_curve.py \
+  --requests 5000 \
+  --concurrency 1,5,10,25,50,100,150,200 \
+  --endpoint /ping \
+  --endpoint /rates/EUR/USD \
+  --endpoint /rates
+```
+
+The script requires both servers to be running:
+
+```bash
+SILTA_PORT=8104 ./scripts/run_silta_native.sh
+FASTAPI_PORT=8103 ./scripts/run_fastapi_rates_baseline.sh
+```
+
+It writes:
+
+- `results/load-curve/load-curve.csv`
+- `results/load-curve/load-curve.svg`
+
+The graph uses requests/sec on the X axis and p95 response time in milliseconds
+on the Y axis. The useful signal is the bend in each line: the point where
+additional throughput causes response time to rise sharply.
+
+## PostgreSQL Tuning
+
+The existing `fpcurhub-postgres-1` container had `max_connections = 20` during
+the first benchmark pass. That is too low for high-concurrency framework
+comparison and can make the database, not the framework, the limiting factor.
+
+Inspect the current database limits:
+
+```bash
+./scripts/inspect_postgres_limits.sh
+```
+
+Preview local benchmark tuning:
+
+```bash
+./scripts/tune_postgres_local.sh
+```
+
+Apply it only when it is acceptable to restart the local PostgreSQL container:
+
+```bash
+APPLY=1 ./scripts/tune_postgres_local.sh
+```
+
+Default tuning values:
+
+| Setting | Value |
+| --- | ---: |
+| `max_connections` | `200` |
+| `shared_buffers` | `512MB` |
+| `effective_cache_size` | `2GB` |
+| `work_mem` | `16MB` |
+| `maintenance_work_mem` | `256MB` |
+| `checkpoint_completion_target` | `0.9` |
+| `wal_buffers` | `16MB` |
+| `random_page_cost` | `1.1` |
+
+After raising PostgreSQL limits, rerun the load curve with higher Silta and
+FastAPI pool sizes:
+
+```bash
+SILTA_DB_MAX_CONNECTIONS=50 SILTA_PORT=8104 ./scripts/run_silta_native.sh
+FASTAPI_DB_MAX_CONNECTIONS=50 FASTAPI_PORT=8103 ./scripts/run_fastapi_rates_baseline.sh
+python scripts/run_load_curve.py --concurrency 1,10,25,50,100,200,400
+```

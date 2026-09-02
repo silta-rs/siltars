@@ -11,11 +11,17 @@ if not DATABASE_URL:
         "DATABASE_URL is required. Use scripts/run_fastapi_rates_baseline.sh "
         "to read credentials from fpcurhub-postgres-1."
     )
+DATABASE_MIN_CONNECTIONS = int(os.environ.get("FASTAPI_DB_MIN_CONNECTIONS", "1"))
+DATABASE_MAX_CONNECTIONS = int(os.environ.get("FASTAPI_DB_MAX_CONNECTIONS", "10"))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=10)
+    app.state.pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=DATABASE_MIN_CONNECTIONS,
+        max_size=DATABASE_MAX_CONNECTIONS,
+    )
     try:
         yield
     finally:
