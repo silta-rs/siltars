@@ -31,6 +31,20 @@ CREATE INDEX IF NOT EXISTS rates_latest_pair_idx
 CREATE INDEX IF NOT EXISTS rates_latest_idx
     ON public.rates (ts_utc DESC);
 
+CREATE TABLE IF NOT EXISTS public.silta_rate_sources (
+    source TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    region TEXT NOT NULL,
+    tier TEXT NOT NULL
+);
+
+INSERT INTO public.silta_rate_sources (source, provider, region, tier)
+VALUES ('silta-poc-seed', 'Silta POC Market Data', 'local', 'alpha')
+ON CONFLICT (source) DO UPDATE
+SET provider = EXCLUDED.provider,
+    region = EXCLUDED.region,
+    tier = EXCLUDED.tier;
+
 INSERT INTO public.rates (rate_type, asset_class, base, quote, rate, ts_utc, source)
 SELECT
     'spot',

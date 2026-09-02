@@ -212,6 +212,7 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
     match (route.method(), route.handler()) {
         (Method::Get, "ping") => get(ping),
         (Method::Get, "list_rates") => get(list_rates),
+        (Method::Get, "list_rates_bulk") => get(list_rates_bulk),
         (Method::Get, "get_rate") => get(get_rate),
         (Method::Get, "get_setting") => get(get_setting),
         (Method::Patch, "patch_setting") => patch(patch_setting),
@@ -311,6 +312,57 @@ struct RateRow {
     source: String,
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct BulkRateRow {
+    id: i64,
+    rate_type: String,
+    asset_class: String,
+    base: String,
+    quote: String,
+    rate: String,
+    ts_utc: String,
+    source: String,
+    provider: String,
+    region: String,
+    tier: String,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkRatesResponse {
+    count: usize,
+    rates: Vec<BulkRateItem>,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkRateItem {
+    id: i64,
+    instrument: BulkInstrument,
+    value: BulkRateValue,
+    source: BulkSource,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkInstrument {
+    rate_type: String,
+    asset_class: String,
+    base: String,
+    quote: String,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkRateValue {
+    rate: String,
+    ts_utc: String,
+}
+
+#[derive(Debug, Serialize)]
+struct BulkSource {
+    code: String,
+    provider: String,
+    region: String,
+    tier: String,
+}
+
 #[derive(Debug, Serialize, sqlx::FromRow)]
 struct SettingRow {
     id: i64,
@@ -337,6 +389,60 @@ async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, Runtim
     .await?;
 
     Ok(Json(json!({ "rates": rows })))
+}
+
+async fn list_rates_bulk(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
+    let pool = state.pool()?;
+    let rows = sqlx::query_as::<_, BulkRateRow>(
+        r#"
+        SELECT
+            r.id,
+            r.rate_type,
+            r.asset_class,
+            r.base,
+            r.quote,
+            r.rate::text AS rate,
+            r.ts_utc::text AS ts_utc,
+            r.source,
+            s.provider,
+            s.region,
+            s.tier
+        FROM public.rates AS r
+        JOIN public.silta_rate_sources AS s ON s.source = r.source
+        ORDER BY r.ts_utc DESC
+        LIMIT 3000
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let rates = rows
+        .into_iter()
+        .map(|row| BulkRateItem {
+            id: row.id,
+            instrument: BulkInstrument {
+                rate_type: row.rate_type,
+                asset_class: row.asset_class,
+                base: row.base,
+                quote: row.quote,
+            },
+            value: BulkRateValue {
+                rate: row.rate,
+                ts_utc: row.ts_utc,
+            },
+            source: BulkSource {
+                code: row.source,
+                provider: row.provider,
+                region: row.region,
+                tier: row.tier,
+            },
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(json!(BulkRatesResponse {
+        count: rates.len(),
+        rates,
+    })))
 }
 
 async fn get_rate(

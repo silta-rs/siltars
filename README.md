@@ -156,6 +156,18 @@ and measures both read and write paths:
 See the one-row alpha report in
 [experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha/README.md).
 
+A second alpha smoke test stresses large JSON serialization with 3,000 nested
+PostgreSQL-backed records per response:
+
+![Silta vs FastAPI big JSON response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha/GET-rates-bulk.svg)
+
+| Endpoint | Silta | FastAPI | Signal |
+| --- | ---: | ---: | --- |
+| `/rates/bulk` | 350 RPS | 137 RPS | Large JSON read path favors Rust structs and Serde serialization in this run |
+
+See the big JSON alpha report in
+[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha/README.md).
+
 ## Current Status
 
 Silta is Pre-Alpha.

@@ -49,6 +49,53 @@ async def list_rates() -> dict[str, list[dict[str, Any]]]:
     return {"rates": [_json_row(row) for row in rows]}
 
 
+@app.get("/rates/bulk")
+async def list_rates_bulk() -> dict[str, Any]:
+    rows = await app.state.pool.fetch(
+        """
+        SELECT
+            r.id,
+            r.rate_type,
+            r.asset_class,
+            r.base,
+            r.quote,
+            r.rate::text,
+            r.ts_utc,
+            r.source,
+            s.provider,
+            s.region,
+            s.tier
+        FROM public.rates AS r
+        JOIN public.silta_rate_sources AS s ON s.source = r.source
+        ORDER BY r.ts_utc DESC
+        LIMIT 3000
+        """
+    )
+    rates = [
+        {
+            "id": row["id"],
+            "instrument": {
+                "rate_type": row["rate_type"],
+                "asset_class": row["asset_class"],
+                "base": row["base"],
+                "quote": row["quote"],
+            },
+            "value": {
+                "rate": row["rate"],
+                "ts_utc": row["ts_utc"].isoformat(),
+            },
+            "source": {
+                "code": row["source"],
+                "provider": row["provider"],
+                "region": row["region"],
+                "tier": row["tier"],
+            },
+        }
+        for row in rows
+    ]
+    return {"count": len(rates), "rates": rates}
+
+
 @app.get("/rates/{base}/{quote}")
 async def get_rate(base: str, quote: str) -> dict[str, Any]:
     row = await app.state.pool.fetchrow(

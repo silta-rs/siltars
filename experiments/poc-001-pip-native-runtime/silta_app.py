@@ -20,6 +20,11 @@ def list_rates():
     return {"rates": []}
 
 
+@app.get("/rates/bulk")
+def list_rates_bulk():
+    return {"count": 0, "rates": []}
+
+
 @app.get("/rates/{base}/{quote}")
 def get_rate():
     return {"base": "EUR", "quote": "USD", "rate": "1.0"}
