@@ -8,6 +8,7 @@ Start here:
 - [Project vision](project.md).
 - [Architecture overview](architecture/overview.md).
 - [Runtime architecture](architecture/runtime.md).
+- [Database and stream adapters](architecture/database-adapters.md).
 - [Python boundary](architecture/python-boundary.md).
 - [Distribution and installation](architecture/distribution.md).
 - [Performance principles](architecture/performance.md).

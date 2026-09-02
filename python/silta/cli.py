@@ -50,6 +50,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="PostgreSQL URL for native database routes. Defaults to DATABASE_URL.",
     )
     dev_parser.add_argument(
+        "--db-min-connections",
+        default=None,
+        help="Minimum native database pool connections.",
+    )
+    dev_parser.add_argument(
+        "--db-max-connections",
+        default=None,
+        help="Maximum native database pool connections.",
+    )
+    dev_parser.add_argument(
+        "--db-acquire-timeout-ms",
+        default=None,
+        help="Native database pool acquire timeout in milliseconds.",
+    )
+    dev_parser.add_argument(
         "--runtime-bin",
         default=None,
         help="Path to the silta-runtime binary. Defaults to SILTA_RUNTIME_BIN or packaged binary.",
@@ -66,6 +81,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             database_url=args.database_url,
+            db_min_connections=args.db_min_connections,
+            db_max_connections=args.db_max_connections,
+            db_acquire_timeout_ms=args.db_acquire_timeout_ms,
             runtime_bin=args.runtime_bin,
         )
 
@@ -90,6 +108,9 @@ def _dev(
     host: str,
     port: str,
     database_url: str | None,
+    db_min_connections: str | None,
+    db_max_connections: str | None,
+    db_acquire_timeout_ms: str | None,
     runtime_bin: str | None,
 ) -> int:
     try:
@@ -124,6 +145,12 @@ def _dev(
     ]
     if database_url is not None:
         command.extend(["--database-url", database_url])
+    if db_min_connections is not None:
+        command.extend(["--db-min-connections", db_min_connections])
+    if db_max_connections is not None:
+        command.extend(["--db-max-connections", db_max_connections])
+    if db_acquire_timeout_ms is not None:
+        command.extend(["--db-acquire-timeout-ms", db_acquire_timeout_ms])
 
     env = os.environ.copy()
     process = subprocess.Popen(command, env=env)

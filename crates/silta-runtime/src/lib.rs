@@ -7,18 +7,19 @@
 use std::error::Error;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::time::Duration;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, patch, post, put};
 use axum::{Json, Router};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
 use silta_core::Application;
 use silta_router::{RouteTable, RouteTableError};
 use sqlx::postgres::PgPoolOptions;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use tokio::net::TcpListener;
 
 /// Errors returned while preparing the runtime.
@@ -77,6 +78,12 @@ pub struct RuntimeConfig {
     pub port: u16,
     /// PostgreSQL connection URL used by native database routes.
     pub database_url: Option<String>,
+    /// Minimum database connections kept by the native pool.
+    pub db_min_connections: u32,
+    /// Maximum database connections allowed by the native pool.
+    pub db_max_connections: u32,
+    /// Maximum time to wait for a database connection from the pool.
+    pub db_acquire_timeout: Duration,
 }
 
 impl Default for RuntimeConfig {
@@ -85,6 +92,9 @@ impl Default for RuntimeConfig {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 8000,
             database_url: None,
+            db_min_connections: 1,
+            db_max_connections: 10,
+            db_acquire_timeout: Duration::from_secs(5),
         }
     }
 }
@@ -122,8 +132,9 @@ impl Runtime {
         let pool = match config.database_url.as_deref() {
             Some(database_url) => Some(
                 PgPoolOptions::new()
-                    .min_connections(10)
-                    .max_connections(50)
+                    .min_connections(config.db_min_connections)
+                    .max_connections(config.db_max_connections)
+                    .acquire_timeout(config.db_acquire_timeout)
                     .connect(database_url)
                     .await?,
             ),
@@ -163,7 +174,7 @@ pub struct AppState {
     pool: Option<PgPool>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, sqlx::FromRow)]
 struct RateRow {
     rate_type: String,
     asset_class: String,
@@ -180,9 +191,9 @@ async fn ping() -> Json<Value> {
 
 async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
     let pool = state.pool()?;
-    let rows = sqlx::query(
+    let rows = sqlx::query_as::<_, RateRow>(
         r#"
-        SELECT rate_type, asset_class, base, quote, rate::text, ts_utc::text, source
+        SELECT rate_type, asset_class, base, quote, rate::text AS rate, ts_utc::text AS ts_utc, source
         FROM public.rates
         ORDER BY public.rates.ts_utc DESC
         LIMIT 100
@@ -191,8 +202,7 @@ async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, Runtim
     .fetch_all(pool)
     .await?;
 
-    let rates = rows.into_iter().map(rate_from_row).collect::<Vec<_>>();
-    Ok(Json(json!({ "rates": rates })))
+    Ok(Json(json!({ "rates": rows })))
 }
 
 async fn get_rate(
@@ -200,9 +210,9 @@ async fn get_rate(
     Path((base, quote)): Path<(String, String)>,
 ) -> Result<Json<Value>, RuntimeRouteError> {
     let pool = state.pool()?;
-    let row = sqlx::query(
+    let row = sqlx::query_as::<_, RateRow>(
         r#"
-        SELECT rate_type, asset_class, base, quote, rate::text, ts_utc::text, source
+        SELECT rate_type, asset_class, base, quote, rate::text AS rate, ts_utc::text AS ts_utc, source
         FROM public.rates
         WHERE base = $1 AND quote = $2
         ORDER BY public.rates.ts_utc DESC
@@ -215,7 +225,7 @@ async fn get_rate(
     .await?;
 
     Ok(Json(match row {
-        Some(row) => json!(rate_from_row(row)),
+        Some(row) => json!(row),
         None => json!({ "missing": true }),
     }))
 }
@@ -234,18 +244,6 @@ async fn update_echo(Path(item_id): Path<i64>, Json(payload): Json<Value>) -> Js
 
 async fn delete_echo(Path(item_id): Path<i64>) -> Json<Value> {
     Json(json!({ "method": "DELETE", "item_id": item_id, "deleted": true }))
-}
-
-fn rate_from_row(row: sqlx::postgres::PgRow) -> RateRow {
-    RateRow {
-        rate_type: row.get("rate_type"),
-        asset_class: row.get("asset_class"),
-        base: row.get("base"),
-        quote: row.get("quote"),
-        rate: row.get("rate"),
-        ts_utc: row.get("ts_utc"),
-        source: row.get("source"),
-    }
 }
 
 impl AppState {

@@ -7,6 +7,9 @@ CONTAINER_NAME="${POSTGRES_CONTAINER:-fpcurhub-postgres-1}"
 HOST="${SILTA_HOST:-127.0.0.1}"
 PORT="${SILTA_PORT:-8000}"
 RUNTIME_BIN="${SILTA_RUNTIME_BIN:-$ROOT_DIR/target/debug/silta-runtime}"
+DB_MIN_CONNECTIONS="${SILTA_DB_MIN_CONNECTIONS:-1}"
+DB_MAX_CONNECTIONS="${SILTA_DB_MAX_CONNECTIONS:-10}"
+DB_ACQUIRE_TIMEOUT_MS="${SILTA_DB_ACQUIRE_TIMEOUT_MS:-5000}"
 
 if [[ ! -x "$RUNTIME_BIN" ]]; then
   echo "silta-runtime binary not found at $RUNTIME_BIN" >&2
@@ -24,4 +27,7 @@ exec "$EXPERIMENT_DIR/.venv/bin/silta" dev "$EXPERIMENT_DIR/silta_app.py:app" \
   --host "$HOST" \
   --port "$PORT" \
   --database-url "$DATABASE_URL" \
+  --db-min-connections "$DB_MIN_CONNECTIONS" \
+  --db-max-connections "$DB_MAX_CONNECTIONS" \
+  --db-acquire-timeout-ms "$DB_ACQUIRE_TIMEOUT_MS" \
   --runtime-bin "$RUNTIME_BIN"
