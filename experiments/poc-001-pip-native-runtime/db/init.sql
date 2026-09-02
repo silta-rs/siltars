@@ -52,3 +52,16 @@ CROSS JOIN (
 WHERE NOT EXISTS (
     SELECT 1 FROM public.rates WHERE source = 'silta-poc-seed'
 );
+
+CREATE TABLE IF NOT EXISTS public.silta_settings (
+    id BIGINT PRIMARY KEY,
+    name TEXT NOT NULL,
+    value TEXT NOT NULL,
+    version BIGINT NOT NULL DEFAULT 1
+);
+
+INSERT INTO public.silta_settings (id, name, value, version)
+VALUES (1, 'alpha', 'enabled', 1)
+ON CONFLICT (id) DO UPDATE
+SET name = EXCLUDED.name,
+    value = EXCLUDED.value;

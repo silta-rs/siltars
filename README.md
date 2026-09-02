@@ -143,6 +143,19 @@ recorded.
 See the full report and caveats in
 [experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke/README.md).
 
+A separate alpha smoke test reduces the database payload to one PostgreSQL row
+and measures both read and write paths:
+
+![Silta vs FastAPI one-row response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha/load-curve.svg)
+
+| Method | Endpoint | Silta | FastAPI | Signal |
+| --- | --- | ---: | ---: | --- |
+| GET | `/setting` | 15,995 RPS | 12,946 RPS | One-row native read path leads in this run |
+| PATCH | `/setting` | 3,463 RPS | 3,568 RPS | Same-row writes are dominated by PostgreSQL update serialization |
+
+See the one-row alpha report in
+[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha/README.md).
+
 ## Current Status
 
 Silta is Pre-Alpha.

@@ -25,6 +25,16 @@ def get_rate():
     return {"base": "EUR", "quote": "USD", "rate": "1.0"}
 
 
+@app.get("/setting")
+def get_setting():
+    return {"id": 1, "name": "alpha", "value": "enabled"}
+
+
+@app.patch("/setting")
+def patch_setting():
+    return {"id": 1, "name": "alpha", "value": "patched"}
+
+
 @app.post("/users", response={"id": 1, "name": "Ada", "email": "ada@example.com"})
 def create_user():
     return {"id": 1, "name": "Ada", "email": "ada@example.com"}

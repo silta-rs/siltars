@@ -213,6 +213,8 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
         (Method::Get, "ping") => get(ping),
         (Method::Get, "list_rates") => get(list_rates),
         (Method::Get, "get_rate") => get(get_rate),
+        (Method::Get, "get_setting") => get(get_setting),
+        (Method::Patch, "patch_setting") => patch(patch_setting),
         (Method::Post, "create_echo") => post(create_echo),
         (Method::Put, "replace_echo") => put(replace_echo),
         (Method::Patch, "update_echo") => patch(update_echo),
@@ -309,6 +311,14 @@ struct RateRow {
     source: String,
 }
 
+#[derive(Debug, Serialize, sqlx::FromRow)]
+struct SettingRow {
+    id: i64,
+    name: String,
+    value: String,
+    version: i64,
+}
+
 async fn ping() -> Json<Value> {
     Json(json!({ "ok": true }))
 }
@@ -352,6 +362,47 @@ async fn get_rate(
         Some(row) => json!(row),
         None => json!({ "missing": true }),
     }))
+}
+
+async fn get_setting(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
+    let pool = state.pool()?;
+    let row = sqlx::query_as::<_, SettingRow>(
+        r#"
+        SELECT id, name, value, version
+        FROM public.silta_settings
+        WHERE id = 1
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(Json(json!(row)))
+}
+
+async fn patch_setting(
+    State(state): State<AppState>,
+    Json(payload): Json<Value>,
+) -> Result<Json<Value>, RuntimeRouteError> {
+    let pool = state.pool()?;
+    let value = payload
+        .get("value")
+        .and_then(Value::as_str)
+        .unwrap_or("patched");
+
+    let row = sqlx::query_as::<_, SettingRow>(
+        r#"
+        UPDATE public.silta_settings
+        SET value = $1,
+            version = version + 1
+        WHERE id = 1
+        RETURNING id, name, value, version
+        "#,
+    )
+    .bind(value)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(Json(json!(row)))
 }
 
 async fn create_echo(Json(payload): Json<Value>) -> Json<Value> {

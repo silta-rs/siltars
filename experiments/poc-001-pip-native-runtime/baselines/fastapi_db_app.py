@@ -65,6 +65,33 @@ async def get_rate(base: str, quote: str) -> dict[str, Any]:
     return _json_row(row) if row else {"missing": True}
 
 
+@app.get("/setting")
+async def get_setting() -> dict[str, Any]:
+    row = await app.state.pool.fetchrow(
+        """
+        SELECT id, name, value, version
+        FROM public.silta_settings
+        WHERE id = 1
+        """
+    )
+    return dict(row)
+
+
+@app.patch("/setting")
+async def patch_setting(payload: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    row = await app.state.pool.fetchrow(
+        """
+        UPDATE public.silta_settings
+        SET value = $1,
+            version = version + 1
+        WHERE id = 1
+        RETURNING id, name, value, version
+        """,
+        str(payload.get("value", "patched")),
+    )
+    return dict(row)
+
+
 @app.post("/echo")
 async def create_echo(payload: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
     return {"method": "POST", "payload": payload}
