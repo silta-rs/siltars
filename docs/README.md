@@ -12,6 +12,7 @@ Start here:
 - [Python boundary](architecture/python-boundary.md).
 - [Distribution and installation](architecture/distribution.md).
 - [Performance principles](architecture/performance.md).
+- [PyPI release preparation](release/pypi.md).
 - [Proofs of concept](pocs/README.md).
 - [POC-001: Python-defined, Rust-executed endpoint](pocs/001-python-defined-rust-executed-endpoint.md).
 - [Getting started](getting-started.md).

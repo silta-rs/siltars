@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "siltars"
-version = "0.1.0"
+version = "0.1.0a0"
 description = "A runtime-first backend framework: Python DX, Rust runtime."
 readme = "README.md"
 requires-python = ">=3.10"
