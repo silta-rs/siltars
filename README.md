@@ -119,29 +119,29 @@ DELETE  /users/{id}
 
 ## Benchmark Snapshot
 
-POC-001 currently contains a local load-curve snapshot of the Silta native Rust
-runtime against a FastAPI baseline on the same local PostgreSQL container after
-benchmark tuning. This is useful engineering signal, not a public performance
-claim.
+POC-001 currently contains a local Python 3.14 smoke/load-curve snapshot of the
+Silta native Rust runtime against a FastAPI baseline on the same reproducible
+PostgreSQL container. This is useful engineering signal, not a public
+performance claim.
 
-![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/rates.svg)
+![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke/rates.svg)
 
 Best local points from the current prototype smoke run:
 
 | Endpoint | Silta | FastAPI | Signal |
 | --- | ---: | ---: | --- |
-| `/ping` | 133,413 RPS | 48,662 RPS | Lower HTTP/runtime overhead |
-| `/rates/EUR/USD` | 15,753 RPS | 11,958 RPS | Native DB path leads after tuning |
-| `/rates` | 9,652 RPS | 3,873 RPS | Larger JSON response favors Rust serialization |
+| `/ping` | 182,345 RPS | 40,878 RPS | Lower HTTP/runtime overhead |
+| `/rates/EUR/USD` | 13,655 RPS | 10,362 RPS | Native DB path leads in this run |
+| `/rates` | 7,023 RPS | 2,899 RPS | Larger JSON response favors Rust serialization |
 
-Important limitations: each point used 5,000 requests, the run was executed
-once, the environment record is incomplete, response bodies are not yet byte-for
-byte identical, and the Python bridge path is not measured yet. The official
-benchmark bar is 30-second runs, repeated three times, with CPU/RSS/startup and
-full dependency versions recorded.
+Important limitations: this fresh graph uses 5-second points and two runs per
+point; response bodies are not yet byte-for-byte identical; and the Python
+bridge path is not measured yet. The official benchmark bar is 30-second runs,
+repeated three times, with CPU/RSS/startup and full dependency versions
+recorded.
 
 See the full report and caveats in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/README.md).
+[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke/README.md).
 
 ## Current Status
 
