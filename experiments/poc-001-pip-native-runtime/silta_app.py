@@ -41,7 +41,7 @@ def replace_user():
 
 @app.patch("/users/{id}")
 def update_user():
-    return {"id": 1, "name": "Ada", "email": "ada@silta.dev"}
+    return {"id": 1, "name": "Ada", "email": "ada@example.com"}
 
 
 @app.delete("/users/{id}")

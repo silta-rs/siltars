@@ -4,6 +4,7 @@
 //! application, while supported HTTP, routing, database, and JSON response paths
 //! execute in native Rust code.
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -12,11 +13,11 @@ use std::time::Duration;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::{delete, get, patch, post, put};
+use axum::routing::{delete, get, head, options, patch, post, put, MethodRouter};
 use axum::{Json, Router};
 use serde::Serialize;
 use serde_json::{json, Value};
-use silta_core::Application;
+use silta_core::{Application, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -142,7 +143,7 @@ impl Runtime {
         };
 
         let state = AppState { pool };
-        let app = native_router(state);
+        let app = native_router(&self.application, state);
         let address = SocketAddr::new(config.host, config.port);
         let listener = TcpListener::bind(address)
             .await
@@ -155,17 +156,140 @@ impl Runtime {
     }
 }
 
-/// Builds the bootstrap native HTTP router.
-pub fn native_router(state: AppState) -> Router {
-    Router::new()
-        .route("/ping", get(ping))
-        .route("/rates", get(list_rates))
-        .route("/rates/:base/:quote", get(get_rate))
-        .route("/echo", post(create_echo))
-        .route("/echo/:item_id", put(replace_echo))
-        .route("/echo/:item_id", patch(update_echo))
-        .route("/echo/:item_id", delete(delete_echo))
-        .with_state(state)
+/// Builds the bootstrap native HTTP router from an application description.
+pub fn native_router(application: &Application, state: AppState) -> Router {
+    let mut routes: BTreeMap<String, MethodRouter<AppState>> = BTreeMap::new();
+
+    for route in application.routes() {
+        let path = axum_path(route.path());
+        let method_router = method_router_for_route(route);
+
+        routes
+            .entry(path)
+            .and_modify(|existing| {
+                *existing = existing.clone().merge(method_router.clone());
+            })
+            .or_insert(method_router);
+    }
+
+    let mut router = Router::new();
+    for (path, method_router) in routes {
+        router = router.route(&path, method_router);
+    }
+
+    router.with_state(state)
+}
+
+fn axum_path(path: &str) -> String {
+    let mut converted = String::with_capacity(path.len());
+    let mut parameter = false;
+
+    for character in path.chars() {
+        match character {
+            '{' => {
+                parameter = true;
+                converted.push(':');
+            }
+            '}' => {
+                parameter = false;
+            }
+            _ => converted.push(character),
+        }
+    }
+
+    if parameter {
+        path.to_owned()
+    } else {
+        converted
+    }
+}
+
+fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
+    if let Some(response) = route.native_response() {
+        return static_json_router(route.method(), response.clone());
+    }
+
+    match (route.method(), route.handler()) {
+        (Method::Get, "ping") => get(ping),
+        (Method::Get, "list_rates") => get(list_rates),
+        (Method::Get, "get_rate") => get(get_rate),
+        (Method::Post, "create_echo") => post(create_echo),
+        (Method::Put, "replace_echo") => put(replace_echo),
+        (Method::Patch, "update_echo") => patch(update_echo),
+        (Method::Delete, "delete_echo") => delete(delete_echo),
+        (method, _) => not_implemented_router(method),
+    }
+}
+
+fn static_json_router(method: Method, response: Value) -> MethodRouter<AppState> {
+    match method {
+        Method::Get => get({
+            let response = response.clone();
+            move || {
+                let response = response.clone();
+                async move { Json(response) }
+            }
+        }),
+        Method::Post => post({
+            let response = response.clone();
+            move || {
+                let response = response.clone();
+                async move { Json(response) }
+            }
+        }),
+        Method::Put => put({
+            let response = response.clone();
+            move || {
+                let response = response.clone();
+                async move { Json(response) }
+            }
+        }),
+        Method::Patch => patch({
+            let response = response.clone();
+            move || {
+                let response = response.clone();
+                async move { Json(response) }
+            }
+        }),
+        Method::Delete => delete({
+            let response = response.clone();
+            move || {
+                let response = response.clone();
+                async move { Json(response) }
+            }
+        }),
+        Method::Options => options({
+            let response = response.clone();
+            move || {
+                let response = response.clone();
+                async move { Json(response) }
+            }
+        }),
+        Method::Head => head(move || async move { StatusCode::NO_CONTENT }),
+    }
+}
+
+fn not_implemented_router(method: Method) -> MethodRouter<AppState> {
+    match method {
+        Method::Get => get(not_implemented),
+        Method::Post => post(not_implemented),
+        Method::Put => put(not_implemented),
+        Method::Patch => patch(not_implemented),
+        Method::Delete => delete(not_implemented),
+        Method::Options => options(not_implemented),
+        Method::Head => head(not_implemented_head),
+    }
+}
+
+async fn not_implemented() -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(json!({ "error": "route is described but has no native runtime handler yet" })),
+    )
+}
+
+async fn not_implemented_head() -> StatusCode {
+    StatusCode::NOT_IMPLEMENTED
 }
 
 /// Shared runtime state for native routes.
@@ -296,6 +420,32 @@ mod tests {
     fn runtime_prepares_route_table() {
         let mut application = Application::new("hello");
         application.add_route(Route::new(Method::Get, "/hello", "hello"));
+
+        let runtime = Runtime::prepare(application).expect("runtime");
+
+        assert!(runtime
+            .route_table()
+            .exact_match(Method::Get, "/hello")
+            .is_some());
+    }
+
+    #[test]
+    fn axum_path_converts_python_parameters() {
+        assert_eq!(
+            super::axum_path("/rates/{base}/{quote}"),
+            "/rates/:base/:quote"
+        );
+    }
+
+    #[test]
+    fn runtime_can_prepare_static_native_response_route() {
+        let mut application = Application::new("hello");
+        application.add_route(Route::with_native_response(
+            Method::Get,
+            "/hello",
+            "hello",
+            serde_json::json!({ "hello": "world" }),
+        ));
 
         let runtime = Runtime::prepare(application).expect("runtime");
 

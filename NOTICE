@@ -8,7 +8,6 @@ Project roots:
 
 - Project: Silta
 - GitHub organization: https://github.com/silta-rs
-- Website: https://silta.dev
 - Initial repository: https://github.com/silta-rs/siltars
 
 Silta is a runtime-first backend platform for Python, powered by a native Rust

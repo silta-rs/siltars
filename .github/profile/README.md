@@ -16,8 +16,5 @@ Rust for execution.
 
 ---
 
-Website:
-https://silta.dev
-
 Repository:
 https://github.com/silta-rs

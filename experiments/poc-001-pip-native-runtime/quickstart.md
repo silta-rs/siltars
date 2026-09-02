@@ -18,7 +18,15 @@ uv venv
 Install Silta:
 
 ```bash
-uv pip install silta
+uv pip install siltars
+```
+
+`siltars` is not published on PyPI yet, so this command does not work today.
+Install the package from the repository checkout instead (run from this
+experiment directory):
+
+```bash
+uv pip install -e ../..
 ```
 
 Inspect the app definition:

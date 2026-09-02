@@ -8,12 +8,17 @@ and run an endpoint where the hot path executes in native Rust modules?
 This experiment validates the product shape:
 
 ```text
-pip install silta
+pip install siltars
   -> Python API / DSL
   -> prebuilt Rust runtime artifact
   -> Rust HTTP/router/serialization path
   -> JSON response
 ```
+
+`siltars` is not on PyPI yet. The experiment currently installs the Python
+package from the local checkout (`pip install -e ../..`) and builds the Rust
+runtime binary with Cargo. Publishing a wheel with the bundled runtime is the
+remaining step for this product shape.
 
 ## What This Must Prove
 

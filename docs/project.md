@@ -349,18 +349,20 @@ Silta was originally conceived and initiated by Serge Gnezdilov.
 
 ## Current Status
 
-Silta is in Technical Preview. The current repository contains:
+Silta is Pre-Alpha. The current repository contains:
 
 - A minimal Rust workspace.
 - Initial runtime, route, HTTP, and core crate boundaries.
 - A minimal Python `App` object.
-- A native Rust runtime prototype for HTTP, JSON, and PostgreSQL-backed routes.
-- Local benchmark reports comparing Silta and FastAPI.
+- A native Rust runtime prototype for HTTP, JSON, Python-produced application
+  definitions, and PostgreSQL-backed benchmark routes.
+- Local benchmark reports comparing Silta and FastAPI as prototype signals.
 - Architecture documentation.
 - Project governance and contribution scaffolding.
 
 It does not yet contain a production Python-to-Rust bridge, ORM, CRUD runtime,
-deployment system, authentication, GraphQL, or gRPC support.
+stable error contract, deployment system, authentication, GraphQL, or gRPC
+support.
 
 ## Mission
 

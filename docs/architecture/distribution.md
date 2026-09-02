@@ -6,8 +6,12 @@ to compile Rust code locally.
 The intended user experience is:
 
 ```bash
-pip install silta
+pip install siltars
 ```
+
+`siltars` is not published on PyPI yet. Until the first release, the package is
+installed from a local checkout with `pip install -e .`. The distribution name
+is `siltars`; the Python import name and the CLI remain `silta`.
 
 Then:
 
@@ -57,7 +61,7 @@ The exact mechanism remains subject to prototype results:
 - Hybrid package with both extension and runtime binary.
 - Generated application IR consumed by a Rust runtime artifact.
 
-The requirement is stable even if the mechanism changes: `pip install silta`
+The requirement is stable even if the mechanism changes: `pip install siltars`
 must install everything needed for normal local use on supported platforms.
 
 ## Wheel Strategy

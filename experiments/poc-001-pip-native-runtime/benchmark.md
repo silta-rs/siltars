@@ -106,8 +106,10 @@ python scripts/bench_http.py \
   --output results/fastapi-db-rates.json
 ```
 
-This baseline uses the existing local `fpcurhub-postgres-1` container and reads
-from `public.rates`.
+The public reproduction path should use this experiment's Docker Compose file,
+which creates and seeds `public.rates`. The existing local
+`fpcurhub-postgres-1` container can still be used for development-only runs, but
+results from that private container must be labelled as local snapshots.
 
 ### Litestar Baseline
 
@@ -218,6 +220,22 @@ Interpretation:
   connection starvation and 500 responses from pool acquire timeout.
 
 ## Load Curves
+
+The committed load-curve report is a local snapshot, not an official benchmark.
+It used 5,000 requests per point and one run per concurrency level. At very high
+RPS, that makes some points too short for public claims.
+
+Before publishing performance claims, rerun the matrix with:
+
+- `oha -z 30s` or equivalent duration-based runs.
+- Three runs per target and concurrency point.
+- Silta native-only, Silta route-from-definition, Rust -> Python -> Rust,
+  FastAPI typical, and FastAPI optimized baselines.
+- CPU model, core count, OS, Rust, axum, sqlx, Python, FastAPI, uvicorn,
+  asyncpg, `oha`, and PostgreSQL versions.
+- RSS, CPU, startup time, allocation profile where available, and raw benchmark
+  output.
+- Byte-compatible success responses and documented error contracts.
 
 To understand where FastAPI starts degrading faster than Silta, measure response
 time as throughput increases:

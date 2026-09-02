@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented prototype.
+Partially implemented prototype.
 
 ## Goal
 

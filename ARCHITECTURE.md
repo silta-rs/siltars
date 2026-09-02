@@ -90,8 +90,11 @@ Silta must be usable by Python developers through Python packaging.
 The intended installation experience is:
 
 ```bash
-pip install silta
+pip install siltars
 ```
+
+The `siltars` distribution is not published on PyPI yet; see
+`docs/architecture/distribution.md` for the current local install path.
 
 A normal user should not need to install Rust, run Cargo, compile native
 extensions manually, or understand Rust build tooling. Rust should be delivered

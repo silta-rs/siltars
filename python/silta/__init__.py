@@ -7,6 +7,7 @@ not start a server, connect to Rust, or implement persistence yet.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 from typing import Any, Callable, Literal, TypeAlias, TypeVar
 
 Handler: TypeAlias = Callable[..., Any]
@@ -21,6 +22,7 @@ class Route:
     method: Method
     path: str
     handler: Handler
+    native_response: Any | None = None
 
 
 class App:
@@ -91,15 +93,46 @@ class App:
 
         return {
             "name": self.name,
-            "routes": [
-                {
-                    "method": route.method,
-                    "path": route.path,
-                    "handler": route.handler.__qualname__,
-                }
-                for route in self._routes
-            ],
+            "routes": [self._describe_route(route) for route in self._routes],
         }
+
+    @staticmethod
+    def _describe_route(route: Route) -> dict[str, Any]:
+        description: dict[str, Any] = {
+            "method": route.method,
+            "path": route.path,
+            "handler": route.handler.__qualname__,
+        }
+
+        if route.native_response is not None:
+            description["native_response"] = route.native_response
+            return description
+
+        signature = inspect.signature(route.handler)
+        required = [
+            parameter
+            for parameter in signature.parameters.values()
+            if parameter.default is inspect.Parameter.empty
+            and parameter.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+        ]
+        if required or inspect.iscoroutinefunction(route.handler):
+            return description
+
+        try:
+            response = route.handler()
+        except Exception:
+            return description
+
+        if inspect.isawaitable(response):
+            return description
+
+        description["native_response"] = response
+        return description
 
     @staticmethod
     def _validate_path(path: str) -> None:

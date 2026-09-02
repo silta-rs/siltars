@@ -3,10 +3,14 @@
 //! These types are intentionally small. They model the application boundary that
 //! the Python API will eventually produce and the Rust runtime will consume.
 
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
 /// A Silta application description.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Application {
     name: String,
+    #[serde(default)]
     routes: Vec<Route>,
 }
 
@@ -36,7 +40,8 @@ impl Application {
 }
 
 /// HTTP methods understood by the bootstrap application model.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum Method {
     Get,
     Post,
@@ -63,11 +68,13 @@ impl Method {
 }
 
 /// A route in the application description.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Route {
     method: Method,
     path: String,
     handler: String,
+    #[serde(default)]
+    native_response: Option<Value>,
 }
 
 impl Route {
@@ -77,6 +84,22 @@ impl Route {
             method,
             path: path.into(),
             handler: handler.into(),
+            native_response: None,
+        }
+    }
+
+    /// Creates a route description with a native JSON response payload.
+    pub fn with_native_response(
+        method: Method,
+        path: impl Into<String>,
+        handler: impl Into<String>,
+        native_response: Value,
+    ) -> Self {
+        Self {
+            method,
+            path: path.into(),
+            handler: handler.into(),
+            native_response: Some(native_response),
         }
     }
 
@@ -93,6 +116,11 @@ impl Route {
     /// Returns the symbolic handler name recorded for the route.
     pub fn handler(&self) -> &str {
         &self.handler
+    }
+
+    /// Returns the optional native JSON response attached to the route.
+    pub fn native_response(&self) -> Option<&Value> {
+        self.native_response.as_ref()
     }
 }
 

@@ -145,7 +145,7 @@ users without requiring Rust knowledge for the standard Python workflow.
 
 Required criteria:
 
-- `pip install silta` installs a platform wheel with the native runtime
+- `pip install siltars` installs a platform wheel with the native runtime
   artifact.
 - The Python route API is stable enough for early users.
 - Native PostgreSQL CRUD works from Python model definitions.

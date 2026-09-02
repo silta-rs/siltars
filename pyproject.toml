@@ -3,7 +3,7 @@ requires = ["hatchling>=1.21"]
 build-backend = "hatchling.build"
 
 [project]
-name = "silta"
+name = "siltars"
 version = "0.1.0"
 description = "A runtime-first backend framework: Python DX, Rust runtime."
 readme = "README.md"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["backend", "framework", "python", "rust", "runtime"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 2 - Pre-Alpha",
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
@@ -28,7 +28,6 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://silta.dev"
 Repository = "https://github.com/silta-rs/siltars"
 Issues = "https://github.com/silta-rs/siltars/issues"
 

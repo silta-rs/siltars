@@ -3,9 +3,10 @@
 The runtime is responsible for turning an application representation into native
 execution state.
 
-In the bootstrap repository, `silta-runtime` only prepares route metadata into a
-route table. It does not start an HTTP server, call Python, validate request
-bodies, query a database, or serialize responses.
+In the current Pre-Alpha repository, `silta-runtime` can read a JSON application
+definition, prepare route metadata into a route table, and start a native Axum
+HTTP server for supported prototype routes. It does not yet provide a production
+Python execution bridge, stable validation layer, stable error contract, or ORM.
 
 The long-term runtime is the Rust execution plane for Silta. Python configures
 and describes it, but the runtime should own high-concurrency request execution

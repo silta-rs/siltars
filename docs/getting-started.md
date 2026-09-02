@@ -1,6 +1,6 @@
 # Getting Started
 
-Silta is in Technical Preview. These instructions verify the repository and
+Silta is Pre-Alpha. These instructions verify the repository and
 show the current Python-facing API shape.
 
 ## Requirements

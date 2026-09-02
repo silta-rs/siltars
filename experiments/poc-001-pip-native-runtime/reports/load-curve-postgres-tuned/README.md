@@ -1,7 +1,9 @@
 # POC-001 Load Curve: Tuned PostgreSQL
 
-This report compares Silta's native Rust runtime against FastAPI on the same
-local PostgreSQL container after benchmark tuning.
+This report records a local POC snapshot comparing Silta's native Rust runtime
+against FastAPI on the same local PostgreSQL container after benchmark tuning.
+It is engineering evidence for the current prototype, not a production
+performance claim.
 
 ## Environment
 
@@ -15,7 +17,21 @@ local PostgreSQL container after benchmark tuning.
 - FastAPI database pool: `FASTAPI_DB_MAX_CONNECTIONS=50`.
 - Benchmark tool: `oha 1.16.0`.
 - Requests per point: `5000`.
+- Runs per point: `1`.
 - Concurrency sweep: `1,10,25,50,100,200,400`.
+
+Known gaps:
+
+- The report does not yet record CPU model, OS version, Rust dependency
+  versions, Python dependency versions, RSS, CPU usage, startup time, or
+  allocation profiles.
+- The run used a private local container and existing `public.rates` data. The
+  experiment now includes a reproducible Docker Compose seed for future runs.
+- The FastAPI baseline is a typical asyncpg/uvicorn comparison, not the most
+  optimized possible FastAPI/orjson/multi-worker setup.
+- Silta and FastAPI success responses are semantically close but not yet
+  byte-identical. Error contracts are not aligned yet.
+- The Rust -> Python -> Rust boundary path is not measured yet.
 
 ## Charts
 
@@ -43,6 +59,8 @@ local PostgreSQL container after benchmark tuning.
 | `/rates/EUR/USD` | 15,753 | 11,958 | Silta leads after PostgreSQL tuning; FastAPI p95 grows faster at high concurrency. |
 | `/rates` | 9,652 | 3,873 | Silta is materially faster for larger JSON responses. |
 
-This is a local POC result, not a public production claim. The important signal
-is the load-curve shape: at higher concurrency, FastAPI response times rise
-faster on the larger database-backed JSON endpoint.
+The important signal is the load-curve shape: at higher concurrency, FastAPI
+response times rise faster on the larger database-backed JSON endpoint in this
+local setup. Before this becomes a public claim, the benchmark must be rerun as
+30-second duration-based tests, three times per point, with full environment and
+resource metrics.

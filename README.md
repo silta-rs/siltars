@@ -17,7 +17,7 @@ Python developer experience
 Rust native runtime
 ```
 
-[Website](https://silta.dev) | [Documentation](docs/README.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
+[Documentation](docs/README.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
 
 ## What Silta Is
 
@@ -50,8 +50,19 @@ compile Rust, or rewrite their application in Rust.
 ## Target Install
 
 ```bash
-pip install silta
+pip install siltars
 ```
+
+> **Not on PyPI yet.** The `siltars` distribution has not been published to
+> PyPI, so the command above does not work today. Until the first release,
+> install from a local checkout of this repository:
+>
+> ```bash
+> pip install -e .
+> ```
+>
+> The distribution name is `siltars`. The Python import name and the CLI stay
+> `silta`.
 
 Silta should not require ordinary Python users to install Rust or run Cargo.
 Native Rust runtime artifacts should be distributed through Python wheels.
@@ -97,12 +108,14 @@ DELETE  /users/{id}
 
 ## Benchmark Snapshot
 
-POC-001 compares the Silta native Rust runtime against FastAPI on the same local
-PostgreSQL container after benchmark tuning.
+POC-001 currently contains a local load-curve snapshot of the Silta native Rust
+runtime against a FastAPI baseline on the same local PostgreSQL container after
+benchmark tuning. This is useful engineering signal, not a public performance
+claim.
 
 ![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/rates.svg)
 
-Best local points from the current prototype:
+Best local points from the current prototype smoke run:
 
 | Endpoint | Silta | FastAPI | Signal |
 | --- | ---: | ---: | --- |
@@ -110,35 +123,51 @@ Best local points from the current prototype:
 | `/rates/EUR/USD` | 15,753 RPS | 11,958 RPS | Native DB path leads after tuning |
 | `/rates` | 9,652 RPS | 3,873 RPS | Larger JSON response favors Rust serialization |
 
-See the full report in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/README.md).
+Important limitations: each point used 5,000 requests, the run was executed
+once, the environment record is incomplete, response bodies are not yet byte-for
+byte identical, and the Python bridge path is not measured yet. The official
+benchmark bar is 30-second runs, repeated three times, with CPU/RSS/startup and
+full dependency versions recorded.
 
-These are local prototype measurements, not a production performance claim.
+See the full report and caveats in
+[experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned](experiments/poc-001-pip-native-runtime/reports/load-curve-postgres-tuned/README.md).
 
 ## Current Status
 
-Silta is in Technical Preview.
+Silta is Pre-Alpha.
 
 The API is not stable yet.
 
 The architecture is being validated through prototypes and benchmarks. The
-first native runtime prototype serves HTTP, JSON, and PostgreSQL-backed routes
-from Rust modules configured through the Python CLI.
+first native runtime prototype can start an HTTP server, read a Python-produced
+JSON application definition, serve simple native JSON routes, and run
+PostgreSQL-backed benchmark routes in Rust.
 
 Silta does not yet provide a production server, Python execution bridge, ORM,
-deployment system, authentication, GraphQL, or gRPC support.
+stable error contract, deployment system, authentication, GraphQL, or gRPC
+support.
 
-## Beta Milestone
+## Alpha Milestone
 
-Silta should move from Technical Preview to Beta when these criteria are met:
+Silta should move from Pre-Alpha to Alpha when these criteria are met:
 
-- `pip install silta` installs a wheel with the native runtime artifact.
+- `pip install siltars` installs a wheel with the native runtime artifact.
 - The Python route API is stable enough for early users.
 - Native PostgreSQL CRUD works from Python model definitions.
 - Runtime configuration is documented for local and container deployments.
 - Benchmark runs are reproducible in CI and locally.
+- A Rust -> Python -> Rust path is measured and documented.
 - The project has a small example application that can be cloned, run, and
   modified without Rust knowledge.
+
+## Positioning
+
+Silta is closest to an application-definition and native-runtime bridge. Robyn
+and Granian are important Python/Rust server references, while PostgREST and
+Hasura prove the value of schema-driven APIs. Silta's intended difference is the
+IR boundary: Python describes routes, models, and policies; Rust executes
+representable HTTP, validation, database, and serialization paths natively; and
+Python remains available as an explicit escape hatch for business logic.
 
 ## Architecture Documents
 

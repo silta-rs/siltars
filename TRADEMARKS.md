@@ -6,8 +6,8 @@ the project depends on formal trademark enforcement.
 The Apache-2.0 license grants copyright and patent permissions. It does not
 grant trademark rights.
 
-The Silta name, project identity, domains, logos, and official community
-channels are part of the project's identity.
+The Silta name, project identity, logos, and official community channels are
+part of the project's identity.
 
 ## Allowed Uses
 
@@ -39,6 +39,5 @@ The original Silta project was conceived and initiated by Serge Gnezdilov.
 
 Official project roots:
 
-- Website: `https://silta.dev`.
 - GitHub organization: `https://github.com/silta-rs`.
 - Initial repository: `https://github.com/silta-rs/siltars`.

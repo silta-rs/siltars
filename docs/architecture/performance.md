@@ -4,7 +4,9 @@ Silta's performance goal is architectural: keep common backend infrastructure on
 the native Rust hot path and enter Python only when application logic requires
 it.
 
-The project does not make performance claims yet.
+The project does not make production performance claims yet. POC benchmark
+snapshots may be checked into `experiments/` as engineering evidence, but they
+must state their limitations and reproduction steps.
 
 ## Principles
 

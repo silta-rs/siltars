@@ -1,5 +1,7 @@
 use std::env;
+use std::fs;
 use std::net::IpAddr;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use silta_core::{Application, Method, Route};
@@ -7,10 +9,25 @@ use silta_runtime::{Runtime, RuntimeConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config = parse_config()?;
-    let runtime = Runtime::prepare(native_application())?;
-    runtime.serve(config).await?;
+    let command = parse_command()?;
+    let application = match command.definition {
+        Some(path) => load_application_definition(path)?,
+        None => native_application(),
+    };
+    let runtime = Runtime::prepare(application)?;
+    runtime.serve(command.runtime).await?;
     Ok(())
+}
+
+struct CommandConfig {
+    runtime: RuntimeConfig,
+    definition: Option<PathBuf>,
+}
+
+fn load_application_definition(path: PathBuf) -> anyhow::Result<Application> {
+    let contents = fs::read_to_string(&path)?;
+    let application = serde_json::from_str::<Application>(&contents)?;
+    Ok(application)
 }
 
 fn native_application() -> Application {
@@ -25,24 +42,9 @@ fn native_application() -> Application {
     app
 }
 
-fn parse_config() -> anyhow::Result<RuntimeConfig> {
-    let mut config = RuntimeConfig::default();
-    config.database_url = env::var("DATABASE_URL").ok();
-    config.db_min_connections = env::var("SILTA_DB_MIN_CONNECTIONS")
-        .ok()
-        .map(|value| value.parse::<u32>())
-        .transpose()?
-        .unwrap_or(config.db_min_connections);
-    config.db_max_connections = env::var("SILTA_DB_MAX_CONNECTIONS")
-        .ok()
-        .map(|value| value.parse::<u32>())
-        .transpose()?
-        .unwrap_or(config.db_max_connections);
-    config.db_acquire_timeout = env::var("SILTA_DB_ACQUIRE_TIMEOUT_MS")
-        .ok()
-        .map(|value| value.parse::<u64>().map(Duration::from_millis))
-        .transpose()?
-        .unwrap_or(config.db_acquire_timeout);
+fn parse_command() -> anyhow::Result<CommandConfig> {
+    let mut config = parse_config_from_env()?;
+    let mut definition = None;
 
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -84,9 +86,10 @@ fn parse_config() -> anyhow::Result<RuntimeConfig> {
                 config.db_acquire_timeout = Duration::from_millis(value.parse::<u64>()?);
             }
             "--definition" => {
-                let _ = args
+                let value = args
                     .next()
                     .ok_or_else(|| anyhow::anyhow!("--definition needs a value"))?;
+                definition = Some(PathBuf::from(value));
             }
             "--help" | "-h" => {
                 print_help();
@@ -96,12 +99,38 @@ fn parse_config() -> anyhow::Result<RuntimeConfig> {
         }
     }
 
+    Ok(CommandConfig {
+        runtime: config,
+        definition,
+    })
+}
+
+fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
+    let mut config = RuntimeConfig::default();
+    config.database_url = env::var("DATABASE_URL").ok();
+    config.db_min_connections = env::var("SILTA_DB_MIN_CONNECTIONS")
+        .ok()
+        .map(|value| value.parse::<u32>())
+        .transpose()?
+        .unwrap_or(config.db_min_connections);
+    config.db_max_connections = env::var("SILTA_DB_MAX_CONNECTIONS")
+        .ok()
+        .map(|value| value.parse::<u32>())
+        .transpose()?
+        .unwrap_or(config.db_max_connections);
+    config.db_acquire_timeout = env::var("SILTA_DB_ACQUIRE_TIMEOUT_MS")
+        .ok()
+        .map(|value| value.parse::<u64>().map(Duration::from_millis))
+        .transpose()?
+        .unwrap_or(config.db_acquire_timeout);
+
     Ok(config)
 }
 
 fn print_help() {
     println!(
-        "silta-runtime --host 127.0.0.1 --port 8000 [--database-url postgresql://...] \
-         [--db-min-connections 1] [--db-max-connections 10]"
+        "silta-runtime --host 127.0.0.1 --port 8000 [--definition app.json] \
+         [--database-url postgresql://...] [--db-min-connections 1] \
+         [--db-max-connections 10]"
     );
 }
