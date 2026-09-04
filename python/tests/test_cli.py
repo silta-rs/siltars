@@ -1,3 +1,5 @@
+import contextlib
+import io
 import signal
 import subprocess
 import unittest
@@ -44,6 +46,24 @@ class BridgeWorkerTests(unittest.TestCase):
         )
 
         self.assertEqual(response, {"id": 1, "status": 200, "body": {"payload": {"ok": True}}})
+
+    def test_bridge_line_redirects_handler_stdout_to_stderr(self) -> None:
+        def noisy() -> dict[str, object]:
+            print("handler noise")
+            return {"ok": True}
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            response = _handle_bridge_line(
+                '{"id":1,"handler":"noisy","body":null}',
+                {"noisy": noisy},
+                _AsyncRunner(),
+            )
+
+        self.assertEqual(response, {"id": 1, "status": 200, "body": {"ok": True}})
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("handler noise", stderr.getvalue())
 
 
 if __name__ == "__main__":

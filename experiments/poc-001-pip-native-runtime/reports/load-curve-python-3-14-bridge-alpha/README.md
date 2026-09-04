@@ -84,6 +84,12 @@ available in CSV and `oha` JSON files.
 
 - This is a short alpha smoke run, not the final benchmark gate.
 - The bridge is a single subprocess worker with a JSON-lines protocol.
+- Handler stdout is redirected to stderr so application `print()` calls do not
+  corrupt the JSON-lines protocol.
+- The runtime skips stale bridge responses after a canceled request and waits
+  for the response id that matches the active request.
+- The single-worker bridge still has head-of-line blocking: a slow Python
+  handler can delay later Python-handler requests.
 - The bridge does not yet pass headers, query params, typed path params, or
   structured errors.
 - FastAPI is measured as a typical uvicorn baseline, not a multi-worker tuned

@@ -556,26 +556,35 @@ impl PythonBridge {
             .await
             .map_err(RuntimeRouteError::PythonBridgeIo)?;
 
-        let mut response_line = String::new();
-        let bytes_read = process
-            .stdout
-            .read_line(&mut response_line)
-            .await
-            .map_err(RuntimeRouteError::PythonBridgeIo)?;
-        if bytes_read == 0 {
-            let _ = process.child.wait().await;
-            return Err(RuntimeRouteError::PythonBridgeClosed);
-        }
+        loop {
+            let mut response_line = String::new();
+            let bytes_read = process
+                .stdout
+                .read_line(&mut response_line)
+                .await
+                .map_err(RuntimeRouteError::PythonBridgeIo)?;
+            if bytes_read == 0 {
+                let _ = process.child.wait().await;
+                return Err(RuntimeRouteError::PythonBridgeClosed);
+            }
 
-        let response = serde_json::from_str::<PythonBridgeResponse>(&response_line)
-            .map_err(RuntimeRouteError::PythonBridgeDeserialize)?;
-        if response.id != id {
-            return Err(RuntimeRouteError::PythonBridgeProtocol(format!(
-                "expected response id {id}, got {}",
-                response.id
-            )));
+            let response = match serde_json::from_str::<PythonBridgeResponse>(&response_line) {
+                Ok(response) => response,
+                Err(error) => {
+                    eprintln!("silta-runtime: skipped non-protocol python bridge output: {error}");
+                    continue;
+                }
+            };
+
+            if response.id != id {
+                eprintln!(
+                    "silta-runtime: skipped stale python bridge response id {}, expected {id}",
+                    response.id
+                );
+                continue;
+            }
+            return Ok(response);
         }
-        Ok(response)
     }
 }
 
@@ -846,7 +855,6 @@ enum RuntimeRouteError {
     PythonBridgeNotConfigured,
     PythonBridgeIo(std::io::Error),
     PythonBridgeSerialize(serde_json::Error),
-    PythonBridgeDeserialize(serde_json::Error),
     PythonBridgeProtocol(String),
     PythonBridgeClosed,
     RequestJson(serde_json::Error),
@@ -885,13 +893,6 @@ impl IntoResponse for RuntimeRouteError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "python bridge request serialization failed",
-                )
-            }
-            Self::PythonBridgeDeserialize(error) => {
-                eprintln!("silta python bridge response deserialization failed: {error}");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "python bridge response deserialization failed",
                 )
             }
             Self::PythonBridgeProtocol(error) => {

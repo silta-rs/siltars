@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib
 import importlib.util
 import inspect
@@ -249,12 +250,14 @@ def _handle_bridge_line(
         "body": request.get("body"),
     }
     try:
-        signature = inspect.signature(handler)
-        result = handler(bridge_request) if signature.parameters else handler()
+        with contextlib.redirect_stdout(sys.stderr):
+            signature = inspect.signature(handler)
+            result = handler(bridge_request) if signature.parameters else handler()
+            body = asyncio_runner.run(result)
         return {
             "id": request_id,
             "status": 200,
-            "body": asyncio_runner.run(result),
+            "body": body,
         }
     except Exception as error:
         return {

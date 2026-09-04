@@ -1,5 +1,7 @@
 """Silta POC app used by the native Rust runtime experiment."""
 
+import time
+
 from silta import App
 
 app = App()
@@ -38,6 +40,23 @@ def get_setting():
 @app.post("/python/echo", python=True)
 def python_echo(request):
     return {"bridge": "python", "payload": request["body"]}
+
+
+@app.get("/ok", python=True)
+def bridge_ok():
+    return {"ok": True}
+
+
+@app.get("/slow", python=True)
+def bridge_slow():
+    time.sleep(1)
+    return {"slow": True}
+
+
+@app.get("/prints", python=True)
+def bridge_prints():
+    print("handler stdout noise")
+    return {"printed": True}
 
 
 @app.post("/echo")
