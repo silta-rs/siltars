@@ -324,6 +324,13 @@ FASTAPI_DB_MAX_CONNECTIONS=50 FASTAPI_PORT=8103 ./scripts/run_fastapi_rates_base
 python scripts/run_load_curve.py --concurrency 1,10,25,50,100,200,400
 ```
 
+`run_silta_native.sh` warms the Silta pool to `SILTA_DB_MAX_CONNECTIONS` before
+the load starts; set `SILTA_DB_MIN_CONNECTIONS` explicitly to test a cold pool.
+On the compose database a pool of 50 is the useful maximum: 100 adds nothing at
+50 concurrent clients and 200 degrades p99. See
+[reports/pool-acquire-ping-2026-09-05](reports/pool-acquire-ping-2026-09-05/README.md)
+for the pool ping measurement behind these defaults.
+
 ## ClickHouse Path
 
 The experimental `/ch/*` routes read the same rate shape from a local ClickHouse
@@ -358,4 +365,3 @@ Silta uses the `clickhouse` crate (HTTP, RowBinary, typed rows, Serde JSON);
 FastAPI uses `clickhouse-connect` async (HTTP, aiohttp) with the per-host
 connector limit raised to the PostgreSQL pool size. Both convert `rate` and
 `ts_utc` to text server-side so the JSON payloads have the same shape.
-
