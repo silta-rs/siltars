@@ -53,6 +53,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Application target, for example app:app or path/to/app.py:app.",
     )
     dev_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
+    dev_parser.add_argument("--request-timeout-ms", default=None,
+                             help="Request deadline in milliseconds (default: SILTA_REQUEST_TIMEOUT_MS or 30000).")
     dev_parser.add_argument("--port", default="8000", help="Port to bind.")
     dev_parser.add_argument(
         "--database-url",
@@ -85,6 +87,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=argparse.SUPPRESS,
     )
     bridge_parser.add_argument("target")
+    bridge_parser.add_argument("--ready", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args(argv)
 
@@ -101,6 +104,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             db_max_connections=args.db_max_connections,
             db_acquire_timeout_ms=args.db_acquire_timeout_ms,
             runtime_bin=args.runtime_bin,
+            request_timeout_ms=args.request_timeout_ms,
         )
 
     if args.command == "_bridge":
@@ -117,7 +121,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             os.close(protocol_fd)
             raise
         with protocol:
-            return _bridge(args.target, protocol_output=protocol)
+            return _bridge(args.target, protocol_output=protocol, announce_ready=args.ready)
 
     parser.error(f"unknown command: {args.command}")
     return 2
@@ -145,6 +149,7 @@ def _dev(
     db_max_connections: str | None,
     db_acquire_timeout_ms: str | None,
     runtime_bin: str | None,
+    request_timeout_ms: str | None = None,
 ) -> int:
     try:
         app = _load_app(target)
@@ -181,6 +186,8 @@ def _dev(
         "--python-bridge-target",
         target,
     ]
+    if request_timeout_ms is not None:
+        command.extend(["--request-timeout-ms", request_timeout_ms])
     if database_url is not None:
         command.extend(["--database-url", database_url])
     if db_min_connections is not None:
@@ -226,7 +233,7 @@ def _wait_for_child(process: subprocess.Popen[Any]) -> int:
             signal.signal(signum, handler)
 
 
-def _bridge(target: str, *, protocol_output: Any = None) -> int:
+def _bridge(target: str, *, protocol_output: Any = None, announce_ready: bool = False) -> int:
     try:
         with contextlib.redirect_stdout(sys.stderr):
             app = _load_app(target)
@@ -238,6 +245,8 @@ def _bridge(target: str, *, protocol_output: Any = None) -> int:
             if name in handlers and handlers[name] is not route.handler:
                 raise ValueError(f"ambiguous Python handler name: {name}")
             handlers[name] = route.handler
+        if announce_ready:
+            print('{"ready":1}', file=protocol_output, flush=True)
         with _AsyncRunner() as asyncio_runner:
             for line in sys.stdin:
                 # A malformed protocol request must close the channel, so Rust

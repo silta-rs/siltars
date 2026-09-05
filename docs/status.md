@@ -22,6 +22,11 @@ numbers are engineering evidence, not production claims.
 - `silta dev` forwards `SIGINT`, `SIGTERM`, and `SIGHUP` to the child runtime,
   so normal process managers do not leave the runtime listening as an orphan.
 
+- The worker supervisor reaps and restarts failed Python children, bounds its
+  queue, checks startup readiness, and cancels active calls on deadline/disconnect.
+- A configurable request deadline covers body extraction and native/Python
+  execution; integration tests exercise recovery and signal-driven shutdown.
+
 ## What Is Not Proven
 
 - The Rust -> Python -> Rust business-logic escape hatch is not production

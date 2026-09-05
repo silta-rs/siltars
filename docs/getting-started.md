@@ -56,3 +56,6 @@ The `App` object records declarations that the runtime boundary can turn into
 an application representation. `response=...` marks a simple native JSON route
 for the current Pre-Alpha runtime. Silta does not yet expose `Model`, an ORM, or
 deployment commands.
+
+For runnable HTTP examples, request deadlines, worker recovery, and migration
+notes, continue with the [FastAPI/Django cookbook](cookbook.md).

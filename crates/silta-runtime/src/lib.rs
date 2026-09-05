@@ -10,26 +10,28 @@ use std::fmt;
 use std::future::IntoFuture;
 use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::process::Stdio;
-use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, head, options, patch, post, put, MethodRouter};
+use axum::Extension;
 use axum::{Json, Router};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
 use silta_core::{Application, ExecutionPlanError, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Connection, PgConnection, PgPool};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
-use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::oneshot;
+use tokio::time::Instant;
+
+mod bridge;
+use bridge::PythonBridge;
 
 /// Errors returned while preparing the runtime.
 #[derive(Debug)]
@@ -52,6 +54,8 @@ pub enum RuntimeError {
     PythonBridge(std::io::Error),
     /// Python bridge configuration does not satisfy the prepared plan.
     InvalidPythonBridgeConfig(String),
+    /// Request timeout is outside the supported range.
+    InvalidRequestTimeout,
 }
 
 impl fmt::Display for RuntimeError {
@@ -69,6 +73,9 @@ impl fmt::Display for RuntimeError {
                 write!(f, "invalid route path {path:?}: {reason}")
             }
             Self::PythonBridge(error) => write!(f, "python bridge error: {error}"),
+            Self::InvalidRequestTimeout => {
+                write!(f, "request timeout must be between 1 ms and 24 hours")
+            }
             Self::InvalidPythonBridgeConfig(reason) => {
                 write!(f, "invalid python bridge configuration: {reason}")
             }
@@ -87,7 +94,7 @@ impl Error for RuntimeError {
             Self::DatabaseConnectionRefused(error) => Some(error),
             Self::InvalidRoutePath { .. } => None,
             Self::PythonBridge(error) => Some(error),
-            Self::InvalidPythonBridgeConfig(_) => None,
+            Self::InvalidPythonBridgeConfig(_) | Self::InvalidRequestTimeout => None,
         }
     }
 }
@@ -117,6 +124,8 @@ pub struct RuntimeConfig {
     pub host: IpAddr,
     /// Port to bind.
     pub port: u16,
+    /// Deadline from receipt of HTTP headers through response creation.
+    pub request_timeout: Duration,
     /// PostgreSQL connection URL used by native database routes.
     pub database_url: Option<String>,
     /// Minimum database connections kept by the native pool.
@@ -136,6 +145,7 @@ impl Default for RuntimeConfig {
         Self {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 8000,
+            request_timeout: Duration::from_secs(30),
             database_url: None,
             db_min_connections: 1,
             db_max_connections: 10,
@@ -182,11 +192,16 @@ impl Runtime {
     pub async fn serve(self, config: RuntimeConfig) -> Result<(), RuntimeError> {
         // Validate the complete configuration before opening a DB connection
         // or starting a worker.
+        validate_request_timeout(config.request_timeout)?;
         let bridge_config = python_bridge_config(&self.application, &config)?;
         let pool = match config.database_url.as_deref() {
             Some(database_url) => Some(create_pool(database_url, &config).await?),
             None => None,
         };
+        let address = SocketAddr::new(config.host, config.port);
+        let listener = TcpListener::bind(address)
+            .await
+            .map_err(RuntimeError::Bind)?;
         let python_bridge = match bridge_config {
             Some((executable, target)) => Some(PythonBridge::spawn(executable, target).await?),
             None => None,
@@ -196,11 +211,18 @@ impl Runtime {
             pool,
             python_bridge: python_bridge.clone(),
         };
-        let app = native_router(&self.application, state)?;
-        let address = SocketAddr::new(config.host, config.port);
-        let listener = TcpListener::bind(address)
-            .await
-            .map_err(RuntimeError::Bind)?;
+        let app = match native_router(&self.application, state) {
+            Ok(app) => app.layer(middleware::from_fn_with_state(
+                config.request_timeout,
+                request_deadline,
+            )),
+            Err(error) => {
+                if let Some(bridge) = python_bridge {
+                    bridge.shutdown().await?;
+                }
+                return Err(error);
+            }
+        };
 
         let (stop_tx, stop_rx) = oneshot::channel::<()>();
         let server = axum::serve(listener, app)
@@ -212,6 +234,7 @@ impl Runtime {
         let result = tokio::select! {
             result = &mut server => result,
             signal = shutdown_signal() => {
+                if let Some(bridge) = &python_bridge { bridge.begin_drain(); }
                 let _ = stop_tx.send(());
                 match signal {
                     Err(error) => Err(error),
@@ -225,12 +248,34 @@ impl Runtime {
                 }
             }
         };
-        // Child ownership is independent of the request I/O lock: an active
-        // handler cannot prevent kill + wait/reap after the grace period.
+        // The supervisor owns the child and reaps it before shutdown completes.
         if let Some(bridge) = python_bridge {
             bridge.shutdown().await?;
         }
         result.map_err(RuntimeError::Server)
+    }
+}
+
+fn validate_request_timeout(timeout: Duration) -> Result<(), RuntimeError> {
+    if timeout < Duration::from_millis(1) || timeout > Duration::from_secs(86400) {
+        return Err(RuntimeError::InvalidRequestTimeout);
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+struct RequestDeadline(Instant);
+
+async fn request_deadline(
+    State(timeout): State<Duration>,
+    mut request: Request,
+    next: Next,
+) -> axum::response::Response {
+    let deadline = Instant::now() + timeout;
+    request.extensions_mut().insert(RequestDeadline(deadline));
+    match tokio::time::timeout_at(deadline, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => RuntimeRouteError::RequestTimeout.into_response(),
     }
 }
 
@@ -438,29 +483,31 @@ fn python_bridge_router(method: Method, handler: String) -> MethodRouter<AppStat
     match method {
         Method::Get => get({
             let handler = handler.clone();
-            move |state, body| call_python_bridge(handler.clone(), state, body)
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
         }),
         Method::Post => post({
             let handler = handler.clone();
-            move |state, body| call_python_bridge(handler.clone(), state, body)
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
         }),
         Method::Put => put({
             let handler = handler.clone();
-            move |state, body| call_python_bridge(handler.clone(), state, body)
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
         }),
         Method::Patch => patch({
             let handler = handler.clone();
-            move |state, body| call_python_bridge(handler.clone(), state, body)
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
         }),
         Method::Delete => delete({
             let handler = handler.clone();
-            move |state, body| call_python_bridge(handler.clone(), state, body)
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
         }),
         Method::Options => options({
             let handler = handler.clone();
-            move |state, body| call_python_bridge(handler.clone(), state, body)
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
         }),
-        Method::Head => head(move |state, body| call_python_bridge(handler.clone(), state, body)),
+        Method::Head => head(move |deadline, state, body| {
+            call_python_bridge(handler.clone(), deadline, state, body)
+        }),
     }
 }
 
@@ -540,150 +587,6 @@ async fn not_implemented_head() -> StatusCode {
 pub struct AppState {
     pool: Option<PgPool>,
     python_bridge: Option<PythonBridge>,
-}
-
-#[derive(Debug, Clone)]
-struct PythonBridge {
-    process: Arc<Mutex<PythonBridgeProcess>>,
-    child: Arc<Mutex<Child>>,
-}
-
-#[derive(Debug)]
-struct PythonBridgeProcess {
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
-    next_id: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct PythonBridgeRequest {
-    id: u64,
-    handler: String,
-    body: Value,
-}
-
-#[derive(Debug, Deserialize)]
-struct PythonBridgeResponse {
-    id: u64,
-    status: u16,
-    body: Value,
-}
-
-impl PythonBridge {
-    async fn spawn(executable: &str, target: &str) -> Result<Self, RuntimeError> {
-        let mut child = Command::new(executable)
-            .args(["-m", "silta.cli", "_bridge", target])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(RuntimeError::PythonBridge)?;
-
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| RuntimeError::PythonBridge(io_other("missing stdin")))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| RuntimeError::PythonBridge(io_other("missing stdout")))?;
-
-        Ok(Self {
-            child: Arc::new(Mutex::new(child)),
-            process: Arc::new(Mutex::new(PythonBridgeProcess {
-                stdin,
-                stdout: BufReader::new(stdout),
-                next_id: 1,
-            })),
-        })
-    }
-
-    async fn shutdown(&self) -> Result<(), RuntimeError> {
-        let mut child = self.child.lock().await;
-        if child
-            .try_wait()
-            .map_err(RuntimeError::PythonBridge)?
-            .is_none()
-        {
-            // Tokio's kill also waits for the child, preventing zombie processes.
-            child.kill().await.map_err(RuntimeError::PythonBridge)?;
-        }
-        Ok(())
-    }
-
-    async fn call(
-        &self,
-        handler: String,
-        body: Value,
-    ) -> Result<PythonBridgeResponse, RuntimeRouteError> {
-        let mut process = self.process.lock().await;
-        let id = process.next_id;
-        process.next_id += 1;
-
-        let request = PythonBridgeRequest { id, handler, body };
-        let mut line =
-            serde_json::to_vec(&request).map_err(RuntimeRouteError::PythonBridgeSerialize)?;
-        line.push(b'\n');
-        process
-            .stdin
-            .write_all(&line)
-            .await
-            .map_err(RuntimeRouteError::PythonBridgeIo)?;
-        process
-            .stdin
-            .flush()
-            .await
-            .map_err(RuntimeRouteError::PythonBridgeIo)?;
-
-        loop {
-            let mut response_line = String::new();
-            let bytes_read = process
-                .stdout
-                .read_line(&mut response_line)
-                .await
-                .map_err(RuntimeRouteError::PythonBridgeIo)?;
-            if bytes_read == 0 {
-                // Release request I/O before acquiring child ownership. Shutdown
-                // only acquires child, so these paths never nest the two locks.
-                drop(process);
-                let mut child = self.child.lock().await;
-                // EOF normally means the worker exited. A worker may also close
-                // its protocol pipe while staying alive; bound that wait so it
-                // cannot hold the child lock and prevent shutdown indefinitely.
-                match tokio::time::timeout(Duration::from_secs(1), child.wait()).await {
-                    Ok(result) => {
-                        result.map_err(RuntimeRouteError::PythonBridgeIo)?;
-                    }
-                    Err(_) => {
-                        // kill() also waits/reaps the child.
-                        child
-                            .kill()
-                            .await
-                            .map_err(RuntimeRouteError::PythonBridgeIo)?;
-                    }
-                }
-                return Err(RuntimeRouteError::PythonBridgeClosed);
-            }
-
-            let response = match serde_json::from_str::<PythonBridgeResponse>(&response_line) {
-                Ok(response) => response,
-                Err(error) => {
-                    eprintln!("silta-runtime: skipped non-protocol python bridge output: {error}");
-                    continue;
-                }
-            };
-
-            if response.id != id {
-                eprintln!(
-                    "silta-runtime: skipped stale python bridge response id {}, expected {id}",
-                    response.id
-                );
-                continue;
-            }
-            return Ok(response);
-        }
-    }
 }
 
 #[allow(clippy::io_other_error)]
@@ -767,6 +670,7 @@ async fn ping() -> Json<Value> {
 
 async fn call_python_bridge(
     handler: String,
+    Extension(deadline): Extension<RequestDeadline>,
     State(state): State<AppState>,
     body: Bytes,
 ) -> Result<impl IntoResponse, RuntimeRouteError> {
@@ -779,7 +683,7 @@ async fn call_python_bridge(
     } else {
         serde_json::from_slice(&body).map_err(RuntimeRouteError::RequestJson)?
     };
-    let response = bridge.call(handler, body).await?;
+    let response = bridge.call(handler, body, deadline.0).await?;
     let status = StatusCode::from_u16(response.status)
         .map_err(|error| RuntimeRouteError::PythonBridgeProtocol(error.to_string()))?;
 
@@ -955,6 +859,8 @@ enum RuntimeRouteError {
     PythonBridgeSerialize(serde_json::Error),
     PythonBridgeProtocol(String),
     PythonBridgeClosed,
+    RequestTimeout,
+    PythonBridgeUnavailable,
     RequestJson(serde_json::Error),
 }
 
@@ -1000,6 +906,11 @@ impl IntoResponse for RuntimeRouteError {
                     "python bridge protocol failed",
                 )
             }
+            Self::RequestTimeout => (StatusCode::GATEWAY_TIMEOUT, "request deadline exceeded"),
+            Self::PythonBridgeUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "python worker queue is full or shutting down",
+            ),
             Self::PythonBridgeClosed => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "python bridge process closed",
@@ -1034,6 +945,17 @@ async fn shutdown_signal() -> Result<(), std::io::Error> {
 mod tests {
     use super::Runtime;
     use silta_core::{Application, Method, Route};
+
+    #[test]
+    fn request_timeout_range_is_validated() {
+        use std::time::Duration;
+        for millis in [0, 86400001, u64::MAX] {
+            assert!(super::validate_request_timeout(Duration::from_millis(millis)).is_err());
+        }
+        for millis in [1, 30000, 86400000] {
+            assert!(super::validate_request_timeout(Duration::from_millis(millis)).is_ok());
+        }
+    }
 
     #[test]
     fn runtime_prepares_route_table() {

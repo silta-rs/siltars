@@ -44,6 +44,16 @@ class WaitForChildTests(unittest.TestCase):
 
 
 class BridgeWorkerTests(unittest.TestCase):
+    def test_readiness_is_emitted_only_after_loading_handlers(self):
+        output = io.StringIO()
+        with patch("silta.cli._load_app", return_value=App()), patch("sys.stdin", io.StringIO()):
+            self.assertEqual(_bridge("ignored:app", protocol_output=output, announce_ready=True), 0)
+        self.assertEqual(json.loads(output.getvalue()), {"ready": 1})
+        output = io.StringIO()
+        with patch("silta.cli._load_app", side_effect=ValueError("bad app")), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(_bridge("ignored:app", protocol_output=output, announce_ready=True), 1)
+        self.assertEqual(output.getvalue(), "")
+
     def test_bridge_line_calls_handler_with_body(self) -> None:
         def echo(request: dict[str, object]) -> dict[str, object]:
             return {"payload": request["body"]}
