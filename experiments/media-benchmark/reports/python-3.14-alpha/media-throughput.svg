@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 780">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<style>text{font-family:Arial,sans-serif;fill:#111827;letter-spacing:0}.grid{stroke:#e5e7eb;stroke-width:1}.axis{stroke:#9ca3af;stroke-width:1}.line{fill:none;stroke-width:3}.dot{stroke:white;stroke-width:2}</style>
+<text x="70" y="58" font-size="32" font-weight="700">Silta Alpha vs FastAPI: binary response throughput</text>
+<text x="70" y="92" font-size="16" fill="#4b5563">3 x 4s runs per point; plotted values are medians. Identical in-memory response bytes.</text>
+<line x1="70" y1="122" x2="100" y2="122" stroke="#2563eb" stroke-width="4"/>
+<text x="110" y="128" font-size="15">Silta native Rust bytes</text>
+<line x1="330" y1="122" x2="360" y2="122" stroke="#ef5b2a" stroke-width="4"/>
+<text x="370" y="128" font-size="15">FastAPI Response, one worker</text>
+<text x="70" y="146" font-size="22" font-weight="700">64 KiB binary</text>
+<text x="70" y="166" font-size="13" fill="#6b7280">65,536 bytes per response</text>
+<line class="grid" x1="70" y1="600.0" x2="470" y2="600.0"/>
+<text x="60" y="605.0" text-anchor="end" font-size="12">0.0</text>
+<line class="grid" x1="70" y1="514.0" x2="470" y2="514.0"/>
+<text x="60" y="519.0" text-anchor="end" font-size="12">1.5</text>
+<line class="grid" x1="70" y1="428.0" x2="470" y2="428.0"/>
+<text x="60" y="433.0" text-anchor="end" font-size="12">2.9</text>
+<line class="grid" x1="70" y1="342.0" x2="470" y2="342.0"/>
+<text x="60" y="347.0" text-anchor="end" font-size="12">4.4</text>
+<line class="grid" x1="70" y1="256.0" x2="470" y2="256.0"/>
+<text x="60" y="261.0" text-anchor="end" font-size="12">5.9</text>
+<line class="grid" x1="70" y1="170.0" x2="470" y2="170.0"/>
+<text x="60" y="175.0" text-anchor="end" font-size="12">7.3</text>
+<line class="grid" x1="74.0" y1="170" x2="74.0" y2="600"/>
+<text x="74.0" y="624" text-anchor="middle" font-size="12">1</text>
+<line class="grid" x1="170.0" y1="170" x2="170.0" y2="600"/>
+<text x="170.0" y="624" text-anchor="middle" font-size="12">25</text>
+<line class="grid" x1="470.0" y1="170" x2="470.0" y2="600"/>
+<text x="470.0" y="624" text-anchor="middle" font-size="12">100</text>
+<line class="axis" x1="70" y1="600" x2="470" y2="600"/>
+<path class="line" d="M 74.0 519.0 L 170.0 224.0 L 470.0 216.1" stroke="#2563eb"/>
+<circle class="dot" cx="74.0" cy="519.0" r="5" fill="#2563eb"><title>Silta c=1: 1.38 GiB/s, 22667 RPS, p99 0.1 ms</title></circle>
+<circle class="dot" cx="170.0" cy="224.0" r="5" fill="#2563eb"><title>Silta c=25: 6.42 GiB/s, 105188 RPS, p99 0.6 ms</title></circle>
+<circle class="dot" cx="470.0" cy="216.1" r="5" fill="#2563eb"><title>Silta c=100: 6.56 GiB/s, 107403 RPS, p99 2.7 ms</title></circle>
+<path class="line" d="M 74.0 547.7 L 170.0 477.4 L 470.0 480.2" stroke="#ef5b2a"/>
+<circle class="dot" cx="74.0" cy="547.7" r="5" fill="#ef5b2a"><title>FastAPI c=1: 0.89 GiB/s, 14628 RPS, p99 0.2 ms</title></circle>
+<circle class="dot" cx="170.0" cy="477.4" r="5" fill="#ef5b2a"><title>FastAPI c=25: 2.09 GiB/s, 34302 RPS, p99 1.6 ms</title></circle>
+<circle class="dot" cx="470.0" cy="480.2" r="5" fill="#ef5b2a"><title>FastAPI c=100: 2.05 GiB/s, 33520 RPS, p99 6.1 ms</title></circle>
+<text x="270.0" y="654" text-anchor="middle" font-size="14">concurrent connections</text>
+<text x="500" y="146" font-size="22" font-weight="700">1 MiB binary</text>
+<text x="500" y="166" font-size="13" fill="#6b7280">1,048,576 bytes per response</text>
+<line class="grid" x1="500" y1="600.0" x2="900" y2="600.0"/>
+<text x="490" y="605.0" text-anchor="end" font-size="12">0.0</text>
+<line class="grid" x1="500" y1="514.0" x2="900" y2="514.0"/>
+<text x="490" y="519.0" text-anchor="end" font-size="12">2.7</text>
+<line class="grid" x1="500" y1="428.0" x2="900" y2="428.0"/>
+<text x="490" y="433.0" text-anchor="end" font-size="12">5.4</text>
+<line class="grid" x1="500" y1="342.0" x2="900" y2="342.0"/>
+<text x="490" y="347.0" text-anchor="end" font-size="12">8.0</text>
+<line class="grid" x1="500" y1="256.0" x2="900" y2="256.0"/>
+<text x="490" y="261.0" text-anchor="end" font-size="12">10.7</text>
+<line class="grid" x1="500" y1="170.0" x2="900" y2="170.0"/>
+<text x="490" y="175.0" text-anchor="end" font-size="12">13.4</text>
+<line class="grid" x1="504.0" y1="170" x2="504.0" y2="600"/>
+<text x="504.0" y="624" text-anchor="middle" font-size="12">1</text>
+<line class="grid" x1="600.0" y1="170" x2="600.0" y2="600"/>
+<text x="600.0" y="624" text-anchor="middle" font-size="12">25</text>
+<line class="grid" x1="900.0" y1="170" x2="900.0" y2="600"/>
+<text x="900.0" y="624" text-anchor="middle" font-size="12">100</text>
+<line class="axis" x1="500" y1="600" x2="900" y2="600"/>
+<path class="line" d="M 504.0 305.3 L 600.0 216.1 L 900.0 286.0" stroke="#2563eb"/>
+<circle class="dot" cx="504.0" cy="305.3" r="5" fill="#2563eb"><title>Silta c=1: 9.19 GiB/s, 9412 RPS, p99 0.2 ms</title></circle>
+<circle class="dot" cx="600.0" cy="216.1" r="5" fill="#2563eb"><title>Silta c=25: 11.98 GiB/s, 12264 RPS, p99 8.1 ms</title></circle>
+<circle class="dot" cx="900.0" cy="286.0" r="5" fill="#2563eb"><title>Silta c=100: 9.79 GiB/s, 10029 RPS, p99 48.0 ms</title></circle>
+<path class="line" d="M 504.0 375.0 L 600.0 330.2 L 900.0 370.4" stroke="#ef5b2a"/>
+<circle class="dot" cx="504.0" cy="375.0" r="5" fill="#ef5b2a"><title>FastAPI c=1: 7.02 GiB/s, 7187 RPS, p99 0.3 ms</title></circle>
+<circle class="dot" cx="600.0" cy="330.2" r="5" fill="#ef5b2a"><title>FastAPI c=25: 8.42 GiB/s, 8620 RPS, p99 6.6 ms</title></circle>
+<circle class="dot" cx="900.0" cy="370.4" r="5" fill="#ef5b2a"><title>FastAPI c=100: 7.16 GiB/s, 7335 RPS, p99 28.5 ms</title></circle>
+<text x="700.0" y="654" text-anchor="middle" font-size="14">concurrent connections</text>
+<text x="930" y="146" font-size="22" font-weight="700">512x512 BMP</text>
+<text x="930" y="166" font-size="13" fill="#6b7280">786,486 bytes per response</text>
+<line class="grid" x1="930" y1="600.0" x2="1330" y2="600.0"/>
+<text x="920" y="605.0" text-anchor="end" font-size="12">0.0</text>
+<line class="grid" x1="930" y1="514.0" x2="1330" y2="514.0"/>
+<text x="920" y="519.0" text-anchor="end" font-size="12">2.0</text>
+<line class="grid" x1="930" y1="428.0" x2="1330" y2="428.0"/>
+<text x="920" y="433.0" text-anchor="end" font-size="12">4.0</text>
+<line class="grid" x1="930" y1="342.0" x2="1330" y2="342.0"/>
+<text x="920" y="347.0" text-anchor="end" font-size="12">6.1</text>
+<line class="grid" x1="930" y1="256.0" x2="1330" y2="256.0"/>
+<text x="920" y="261.0" text-anchor="end" font-size="12">8.1</text>
+<line class="grid" x1="930" y1="170.0" x2="1330" y2="170.0"/>
+<text x="920" y="175.0" text-anchor="end" font-size="12">10.1</text>
+<line class="grid" x1="934.0" y1="170" x2="934.0" y2="600"/>
+<text x="934.0" y="624" text-anchor="middle" font-size="12">1</text>
+<line class="grid" x1="1030.0" y1="170" x2="1030.0" y2="600"/>
+<text x="1030.0" y="624" text-anchor="middle" font-size="12">25</text>
+<line class="grid" x1="1330.0" y1="170" x2="1330.0" y2="600"/>
+<text x="1330.0" y="624" text-anchor="middle" font-size="12">100</text>
+<line class="axis" x1="930" y1="600" x2="1330" y2="600"/>
+<path class="line" d="M 934.0 314.0 L 1030.0 216.1 L 1330.0 253.2" stroke="#2563eb"/>
+<circle class="dot" cx="934.0" cy="314.0" r="5" fill="#2563eb"><title>Silta c=1: 6.72 GiB/s, 9173 RPS, p99 0.2 ms</title></circle>
+<circle class="dot" cx="1030.0" cy="216.1" r="5" fill="#2563eb"><title>Silta c=25: 9.02 GiB/s, 12313 RPS, p99 11.2 ms</title></circle>
+<circle class="dot" cx="1330.0" cy="253.2" r="5" fill="#2563eb"><title>Silta c=100: 8.15 GiB/s, 11122 RPS, p99 37.4 ms</title></circle>
+<path class="line" d="M 934.0 382.4 L 1030.0 305.4 L 1330.0 317.9" stroke="#ef5b2a"/>
+<circle class="dot" cx="934.0" cy="382.4" r="5" fill="#ef5b2a"><title>FastAPI c=1: 5.11 GiB/s, 6979 RPS, p99 0.4 ms</title></circle>
+<circle class="dot" cx="1030.0" cy="305.4" r="5" fill="#ef5b2a"><title>FastAPI c=25: 6.92 GiB/s, 9449 RPS, p99 5.9 ms</title></circle>
+<circle class="dot" cx="1330.0" cy="317.9" r="5" fill="#ef5b2a"><title>FastAPI c=100: 6.63 GiB/s, 9046 RPS, p99 19.2 ms</title></circle>
+<text x="1130.0" y="654" text-anchor="middle" font-size="14">concurrent connections</text>
+<text x="28" y="385" transform="rotate(-90 28 385)" text-anchor="middle" font-size="14">GiB/s</text>
+<text x="70" y="708" font-size="13" fill="#6b7280">Python 3.14.7 | FastAPI 0.141.1 | Uvicorn 0.52.4 | Rust release build | oha 1.16</text>
+<text x="70" y="736" font-size="13" fill="#6b7280">Loopback, in-memory payloads, no filesystem or image encoding. Local Alpha evidence, not a general performance claim.</text>
+</svg>

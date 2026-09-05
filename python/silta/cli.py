@@ -70,6 +70,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="PostgreSQL URL for native database routes. Defaults to DATABASE_URL.",
     )
     dev_parser.add_argument(
+        "--mysql-url",
+        default=None,
+        help="MySQL URL for native MySQL routes. Defaults to MYSQL_URL.",
+    )
+    dev_parser.add_argument(
         "--db-min-connections",
         default=None,
         help="Minimum native database pool connections.",
@@ -123,6 +128,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             database_url=args.database_url,
+            mysql_url=args.mysql_url,
             db_min_connections=args.db_min_connections,
             db_max_connections=args.db_max_connections,
             db_acquire_timeout_ms=args.db_acquire_timeout_ms,
@@ -175,6 +181,7 @@ def _dev(
     host: str,
     port: str,
     database_url: str | None,
+    mysql_url: str | None,
     db_min_connections: str | None,
     db_max_connections: str | None,
     db_acquire_timeout_ms: str | None,
@@ -227,6 +234,8 @@ def _dev(
         command.extend(["--request-timeout-ms", request_timeout_ms])
     if database_url is not None:
         command.extend(["--database-url", database_url])
+    if mysql_url is not None:
+        command.extend(["--mysql-url", mysql_url])
     if db_min_connections is not None:
         command.extend(["--db-min-connections", db_min_connections])
     if db_max_connections is not None:

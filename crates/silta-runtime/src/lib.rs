@@ -10,10 +10,12 @@ use std::fmt;
 use std::future::IntoFuture;
 use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use axum::body::Bytes;
 use axum::extract::{Path, Request, State};
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::StatusCode;
 use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
@@ -25,8 +27,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use silta_core::{Application, ExecutionPlanError, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
+use sqlx::mysql::MySqlPoolOptions;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::{Connection, PgConnection, PgPool};
+use sqlx::{Connection, MySqlConnection, MySqlPool, PgConnection, PgPool};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
@@ -143,6 +146,8 @@ pub struct RuntimeConfig {
     pub metrics: MetricsConfig,
     /// PostgreSQL connection URL used by native database routes.
     pub database_url: Option<String>,
+    /// MySQL connection URL used by native MySQL routes.
+    pub mysql_url: Option<String>,
     /// Minimum database connections kept by the native pool.
     pub db_min_connections: u32,
     /// Maximum database connections allowed by the native pool.
@@ -171,6 +176,7 @@ impl Default for RuntimeConfig {
             request_timeout: Duration::from_secs(30),
             metrics: MetricsConfig::default(),
             database_url: None,
+            mysql_url: None,
             db_min_connections: 1,
             db_max_connections: 10,
             db_acquire_timeout: Duration::from_secs(5),
@@ -223,7 +229,11 @@ impl Runtime {
         config.metrics.validate()?;
         let bridge_config = python_bridge_config(&self.application, &config)?;
         let pool = match config.database_url.as_deref() {
-            Some(database_url) => Some(create_pool(database_url, &config).await?),
+            Some(database_url) => Some(create_postgres_pool(database_url, &config).await?),
+            None => None,
+        };
+        let mysql_pool = match config.mysql_url.as_deref() {
+            Some(mysql_url) => Some(create_mysql_pool(mysql_url, &config).await?),
             None => None,
         };
         let clickhouse = match config.clickhouse_url.as_deref() {
@@ -263,6 +273,7 @@ impl Runtime {
         let state = AppState {
             pool,
             clickhouse,
+            mysql_pool,
             python_bridge: python_bridge.clone(),
         };
         let app = match native_router(&self.application, state) {
@@ -393,7 +404,10 @@ fn python_bridge_config<'a>(
     }
 }
 
-async fn create_pool(database_url: &str, config: &RuntimeConfig) -> Result<PgPool, RuntimeError> {
+async fn create_postgres_pool(
+    database_url: &str,
+    config: &RuntimeConfig,
+) -> Result<PgPool, RuntimeError> {
     PgConnection::connect(database_url)
         .await
         .map_err(|error| {
@@ -408,6 +422,32 @@ async fn create_pool(database_url: &str, config: &RuntimeConfig) -> Result<PgPoo
         .map_err(RuntimeError::Database)?;
 
     PgPoolOptions::new()
+        .min_connections(config.db_min_connections)
+        .max_connections(config.db_max_connections)
+        .acquire_timeout(config.db_acquire_timeout)
+        .connect(database_url)
+        .await
+        .map_err(RuntimeError::Database)
+}
+
+async fn create_mysql_pool(
+    database_url: &str,
+    config: &RuntimeConfig,
+) -> Result<MySqlPool, RuntimeError> {
+    MySqlConnection::connect(database_url)
+        .await
+        .map_err(|error| {
+            if is_connection_refused(&error) {
+                RuntimeError::DatabaseConnectionRefused(error)
+            } else {
+                RuntimeError::Database(error)
+            }
+        })?
+        .close()
+        .await
+        .map_err(RuntimeError::Database)?;
+
+    MySqlPoolOptions::new()
         .min_connections(config.db_min_connections)
         .max_connections(config.db_max_connections)
         .acquire_timeout(config.db_acquire_timeout)
@@ -540,6 +580,10 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
         (Method::Get, "ch_list_rates") => get(ch_list_rates),
         (Method::Get, "ch_list_rates_1000") => get(ch_list_rates_1000),
         (Method::Patch, "patch_setting") => patch(patch_setting),
+        (Method::Get, "list_mysql_events") => get(list_mysql_events),
+        (Method::Get, "get_binary_64k") => get(get_binary_64k),
+        (Method::Get, "get_binary_1m") => get(get_binary_1m),
+        (Method::Get, "get_benchmark_bmp") => get(get_benchmark_bmp),
         (Method::Post, "create_echo") => post(create_echo),
         (Method::Put, "replace_echo") => put(replace_echo),
         (Method::Patch, "update_echo") => patch(update_echo),
@@ -656,6 +700,7 @@ async fn not_implemented_head() -> StatusCode {
 pub struct AppState {
     pool: Option<PgPool>,
     clickhouse: Option<ClickHouse>,
+    mysql_pool: Option<MySqlPool>,
     python_bridge: Option<PythonBridge>,
 }
 
@@ -767,6 +812,20 @@ struct SettingRow {
     name: String,
     value: String,
     version: i64,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+struct MySqlEventRow {
+    id: i64,
+    group_id: i32,
+    metric: i64,
+    label: String,
+}
+
+#[derive(Debug, Serialize)]
+struct MySqlEventsResponse {
+    count: usize,
+    rows: Vec<MySqlEventRow>,
 }
 
 async fn ping() -> Json<Value> {
@@ -1004,6 +1063,119 @@ async fn patch_setting(
     Ok(Json(row))
 }
 
+async fn list_mysql_events(
+    State(state): State<AppState>,
+    Path(limit): Path<u32>,
+) -> Result<Json<MySqlEventsResponse>, RuntimeRouteError> {
+    let pool = state.mysql_pool()?;
+    let query = match limit {
+        1 => {
+            r#"
+        SELECT id, group_id, metric, label
+        FROM benchmark_events
+        ORDER BY id
+        LIMIT 1
+        "#
+        }
+        100 => {
+            r#"
+        SELECT id, group_id, metric, label
+        FROM benchmark_events
+        ORDER BY id
+        LIMIT 100
+        "#
+        }
+        1000 => {
+            r#"
+        SELECT id, group_id, metric, label
+        FROM benchmark_events
+        ORDER BY id
+        LIMIT 1000
+        "#
+        }
+        _ => return Err(RuntimeRouteError::UnsupportedMysqlLimit),
+    };
+    let rows = sqlx::query_as::<_, MySqlEventRow>(query)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(Json(MySqlEventsResponse {
+        count: rows.len(),
+        rows,
+    }))
+}
+
+static BINARY_64K: LazyLock<Bytes> = LazyLock::new(|| benchmark_bytes(64 * 1024));
+static BINARY_1M: LazyLock<Bytes> = LazyLock::new(|| benchmark_bytes(1024 * 1024));
+static BENCHMARK_BMP: LazyLock<Bytes> = LazyLock::new(|| benchmark_bmp(512, 512));
+
+async fn get_binary_64k() -> impl IntoResponse {
+    (
+        [
+            (CONTENT_TYPE, "application/octet-stream"),
+            (CACHE_CONTROL, "no-store"),
+        ],
+        BINARY_64K.clone(),
+    )
+}
+
+async fn get_binary_1m() -> impl IntoResponse {
+    (
+        [
+            (CONTENT_TYPE, "application/octet-stream"),
+            (CACHE_CONTROL, "no-store"),
+        ],
+        BINARY_1M.clone(),
+    )
+}
+
+async fn get_benchmark_bmp() -> impl IntoResponse {
+    (
+        [(CONTENT_TYPE, "image/bmp"), (CACHE_CONTROL, "no-store")],
+        BENCHMARK_BMP.clone(),
+    )
+}
+
+fn benchmark_bytes(size: usize) -> Bytes {
+    Bytes::from(
+        (0..size)
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn benchmark_bmp(width: u32, height: u32) -> Bytes {
+    let row_size = width * 3;
+    let image_size = row_size * height;
+    let file_size = 54 + image_size;
+    let mut image = Vec::with_capacity(file_size as usize);
+    image.extend_from_slice(b"BM");
+    image.extend_from_slice(&file_size.to_le_bytes());
+    image.extend_from_slice(&[0; 4]);
+    image.extend_from_slice(&54_u32.to_le_bytes());
+    image.extend_from_slice(&40_u32.to_le_bytes());
+    image.extend_from_slice(&(width as i32).to_le_bytes());
+    image.extend_from_slice(&(height as i32).to_le_bytes());
+    image.extend_from_slice(&1_u16.to_le_bytes());
+    image.extend_from_slice(&24_u16.to_le_bytes());
+    image.extend_from_slice(&0_u32.to_le_bytes());
+    image.extend_from_slice(&image_size.to_le_bytes());
+    image.extend_from_slice(&2835_i32.to_le_bytes());
+    image.extend_from_slice(&2835_i32.to_le_bytes());
+    image.extend_from_slice(&0_u32.to_le_bytes());
+    image.extend_from_slice(&0_u32.to_le_bytes());
+    for y in 0..height {
+        for x in 0..width {
+            image.extend_from_slice(&[
+                ((x + y) % 256) as u8,
+                ((x * 2) % 256) as u8,
+                ((y * 2) % 256) as u8,
+            ]);
+        }
+    }
+    Bytes::from(image)
+}
+
 async fn create_echo(Json(payload): Json<Value>) -> Json<Value> {
     Json(json!({ "method": "POST", "payload": payload }))
 }
@@ -1026,9 +1198,13 @@ impl AppState {
             .as_ref()
             .ok_or(RuntimeRouteError::DatabaseNotConfigured)
     }
-}
 
-impl AppState {
+    fn mysql_pool(&self) -> Result<&MySqlPool, RuntimeRouteError> {
+        self.mysql_pool
+            .as_ref()
+            .ok_or(RuntimeRouteError::DatabaseNotConfigured)
+    }
+
     fn clickhouse(&self) -> Result<&ClickHouseClient, RuntimeRouteError> {
         self.clickhouse
             .as_ref()
@@ -1043,6 +1219,7 @@ enum RuntimeRouteError {
     Database(sqlx::Error),
     ClickHouseNotConfigured,
     ClickHouse(clickhouse::error::Error),
+    UnsupportedMysqlLimit,
     PythonBridgeNotConfigured,
     PythonBridgeIo(std::io::Error),
     PythonBridgeSerialize(serde_json::Error),
@@ -1088,6 +1265,10 @@ impl IntoResponse for RuntimeRouteError {
                 eprintln!("silta runtime clickhouse query failed: {error}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "clickhouse query failed")
             }
+            Self::UnsupportedMysqlLimit => (
+                StatusCode::BAD_REQUEST,
+                "MySQL benchmark limit must be 1, 100, or 1000",
+            ),
             Self::PythonBridgeIo(error) => {
                 eprintln!("silta python bridge I/O failed: {error}");
                 (
@@ -1250,5 +1431,25 @@ mod tests {
         assert!(config.clickhouse_url.is_none());
         assert_eq!(config.clickhouse_database, "silta_poc");
         assert!(config.clickhouse_max_threads.is_none());
+    }
+
+    #[test]
+    fn benchmark_binary_payload_is_deterministic() {
+        let payload = super::benchmark_bytes(65_536);
+
+        assert_eq!(payload.len(), 65_536);
+        assert_eq!(&payload[..4], &[0, 1, 2, 3]);
+        assert_eq!(payload[251], 0);
+    }
+
+    #[test]
+    fn benchmark_bmp_has_valid_header_and_size() {
+        let image = super::benchmark_bmp(512, 512);
+
+        assert_eq!(image.len(), 786_486);
+        assert_eq!(&image[..2], b"BM");
+        assert_eq!(u32::from_le_bytes(image[2..6].try_into().unwrap()), 786_486);
+        assert_eq!(u32::from_le_bytes(image[10..14].try_into().unwrap()), 54);
+        assert_eq!(u16::from_le_bytes(image[28..30].try_into().unwrap()), 24);
     }
 }

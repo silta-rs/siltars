@@ -23,7 +23,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 silta-core.workspace = true
 silta-router.workspace = true
-sqlx = { workspace = true, features = ["derive", "postgres", "runtime-tokio", "tls-native-tls"] }
+sqlx = { workspace = true, features = ["derive", "mysql", "postgres", "runtime-tokio", "tls-native-tls"] }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 
 # One OpenTelemetry meter feeds both scrape and periodic OTLP export.
