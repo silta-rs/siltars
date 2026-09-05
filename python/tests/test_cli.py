@@ -11,10 +11,41 @@ from silta import App
 from silta.cli import (
     _AsyncRunner,
     _bridge,
+    _dev,
     _encode_bridge_response,
     _handle_bridge_line,
     _wait_for_child,
 )
+
+
+class DevCommandTests(unittest.TestCase):
+    def test_mysql_url_is_forwarded_to_runtime(self) -> None:
+        process = Mock(spec=subprocess.Popen)
+        with (
+            patch("silta.cli._load_app", return_value=App()),
+            patch("silta.cli._find_runtime_binary", return_value="silta-runtime"),
+            patch("silta.cli.subprocess.Popen", return_value=process) as popen,
+            patch("silta.cli._wait_for_child", return_value=0),
+        ):
+            result = _dev(
+                target="app.py:app",
+                host="127.0.0.1",
+                port="8000",
+                database_url=None,
+                mysql_url="mysql://silta@localhost/silta_bench",
+                db_min_connections=None,
+                db_max_connections="32",
+                db_acquire_timeout_ms=None,
+                runtime_bin=None,
+            )
+
+        self.assertEqual(result, 0)
+        command = popen.call_args.args[0]
+        self.assertEqual(
+            command[command.index("--mysql-url") + 1],
+            "mysql://silta@localhost/silta_bench",
+        )
+        self.assertEqual(command[command.index("--db-max-connections") + 1], "32")
 
 
 class WaitForChildTests(unittest.TestCase):

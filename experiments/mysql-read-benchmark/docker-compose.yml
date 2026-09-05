@@ -1,0 +1,23 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: silta-mysql-bench
+    environment:
+      MYSQL_DATABASE: silta_bench
+      MYSQL_USER: silta
+      MYSQL_PASSWORD: silta
+      MYSQL_ROOT_PASSWORD: silta-root
+    ports:
+      - "127.0.0.1:53306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/benchmark.cnf:/etc/mysql/conf.d/benchmark.cnf:ro
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+volumes:
+  mysql-data:

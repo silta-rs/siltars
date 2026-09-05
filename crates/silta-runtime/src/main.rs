@@ -49,6 +49,18 @@ fn native_application() -> Application {
     ));
     app.add_route(Route::new(Method::Get, "/setting", "get_setting"));
     app.add_route(Route::new(Method::Patch, "/setting", "patch_setting"));
+    app.add_route(Route::new(
+        Method::Get,
+        "/mysql/events/{limit}",
+        "list_mysql_events",
+    ));
+    app.add_route(Route::new(Method::Get, "/media/blob/64k", "get_binary_64k"));
+    app.add_route(Route::new(Method::Get, "/media/blob/1m", "get_binary_1m"));
+    app.add_route(Route::new(
+        Method::Get,
+        "/media/image.bmp",
+        "get_benchmark_bmp",
+    ));
     app.add_route(Route::new(Method::Post, "/echo", "create_echo"));
     app.add_route(Route::new(Method::Put, "/echo/{item_id}", "replace_echo"));
     app.add_route(Route::new(Method::Patch, "/echo/{item_id}", "update_echo"));
@@ -142,6 +154,12 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
                     .ok_or_else(|| anyhow::anyhow!("--database-url needs a value"))?;
                 config.database_url = Some(value);
             }
+            "--mysql-url" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--mysql-url needs a value"))?;
+                config.mysql_url = Some(value);
+            }
             "--db-min-connections" => {
                 let value = args
                     .next()
@@ -226,6 +244,7 @@ fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
         .transpose()?
         .unwrap_or(config.metrics.export_timeout);
     config.database_url = env::var("DATABASE_URL").ok();
+    config.mysql_url = env::var("MYSQL_URL").ok();
     config.db_min_connections = env::var("SILTA_DB_MIN_CONNECTIONS")
         .ok()
         .map(|value| value.parse::<u32>())
@@ -258,9 +277,11 @@ fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
 fn print_help() {
     println!(
         "silta-runtime --host 127.0.0.1 --port 8000 [--definition app.json] \
-         [--database-url postgresql://...] [--db-min-connections 1] \
+         [--database-url postgresql://...] [--mysql-url mysql://...] \
+         [--db-min-connections 1] \
          [--db-max-connections 10] \
-         [--clickhouse-url http://127.0.0.1:8123] [--clickhouse-database silta_poc] [--clickhouse-max-threads 1] [--python-bridge-executable python] \
+         [--clickhouse-url http://127.0.0.1:8123] [--clickhouse-database silta_poc] [--clickhouse-max-threads 1] \
+         [--python-bridge-executable python] \
          [--python-bridge-target app.py:app] [--request-timeout-ms 30000] \
          [--metrics-listen 127.0.0.1:9464] [--otlp-metrics-endpoint http://localhost:4318/v1/metrics] \
          [--service-name my-api] [--metrics-export-interval-ms 15000] [--metrics-export-timeout-ms 2000]"
