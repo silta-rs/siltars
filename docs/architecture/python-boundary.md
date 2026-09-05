@@ -146,12 +146,16 @@ experience.
 
 ## Current Bootstrap Position
 
-The repository does not choose a final boundary yet.
+The repository now follows the hybrid direction: `App` produces a versioned
+[Execution Plan](execution-plan.md), and the Rust runtime validates its explicit
+route execution decisions before preparing the router. Ordinary handlers are
+classified as hybrid without requiring an execution flag; static responses are
+classified as native.
 
-The current Python package records declarations through `App`. The current Rust
-workspace defines minimal application and routing metadata. The next decision is
-how Python-authored metadata becomes a versioned representation that Rust can
-prepare and execute.
+The request-time Python path is still a single JSON-lines subprocess worker.
+The execution plan is therefore a stable control-plane foundation, not evidence
+that worker pooling, typed request extraction, binary IPC, or file streaming are
+already implemented.
 
 ## Decision Criteria
 

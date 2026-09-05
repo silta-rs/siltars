@@ -11,50 +11,40 @@
 <line class="grid" x1="78" y1="531.2" x2="1072" y2="531.2"/>
 <text x="68" y="535.2" text-anchor="end">38</text>
 <line class="grid" x1="78" y1="412.4" x2="1072" y2="412.4"/>
-<text x="68" y="416.4" text-anchor="end">76</text>
+<text x="68" y="416.4" text-anchor="end">75</text>
 <line class="grid" x1="78" y1="293.6" x2="1072" y2="293.6"/>
-<text x="68" y="297.6" text-anchor="end">115</text>
+<text x="68" y="297.6" text-anchor="end">113</text>
 <line class="grid" x1="78" y1="174.8" x2="1072" y2="174.8"/>
-<text x="68" y="178.8" text-anchor="end">153</text>
+<text x="68" y="178.8" text-anchor="end">151</text>
 <line class="grid" x1="78" y1="56.0" x2="1072" y2="56.0"/>
-<text x="68" y="60.0" text-anchor="end">191</text>
+<text x="68" y="60.0" text-anchor="end">189</text>
 <line class="grid" x1="78.0" y1="56" x2="78.0" y2="650"/>
 <text x="78.0" y="672" text-anchor="middle">0</text>
 <line class="grid" x1="276.8" y1="56" x2="276.8" y2="650"/>
-<text x="276.8" y="672" text-anchor="middle">771</text>
+<text x="276.8" y="672" text-anchor="middle">758</text>
 <line class="grid" x1="475.6" y1="56" x2="475.6" y2="650"/>
-<text x="475.6" y="672" text-anchor="middle">1,541</text>
+<text x="475.6" y="672" text-anchor="middle">1,516</text>
 <line class="grid" x1="674.4" y1="56" x2="674.4" y2="650"/>
-<text x="674.4" y="672" text-anchor="middle">2,312</text>
+<text x="674.4" y="672" text-anchor="middle">2,274</text>
 <line class="grid" x1="873.2" y1="56" x2="873.2" y2="650"/>
-<text x="873.2" y="672" text-anchor="middle">3,082</text>
+<text x="873.2" y="672" text-anchor="middle">3,032</text>
 <line class="grid" x1="1072.0" y1="56" x2="1072.0" y2="650"/>
-<text x="1072.0" y="672" text-anchor="middle">3,853</text>
+<text x="1072.0" y="672" text-anchor="middle">3,790</text>
 <circle cx="90" cy="48" r="5" fill="#2563eb"/>
 <text x="100" y="52">Silta</text>
 <circle cx="200" cy="48" r="5" fill="#dc2626"/>
 <text x="210" y="52">FastAPI</text>
-<path class="series" d="M 705.8 158.4 L 725.3 648.1 L 726.6 183.2 L 728.4 329.4 L 733.2 325.5 L 734.5 648.0 L 773.5 475.9 L 782.2 472.6 L 947.3 624.0 L 971.3 624.9" stroke="#2563eb"/>
-<circle class="point" cx="705.8" cy="158.4" r="4" fill="#2563eb"><title>Silta PATCH /setting c=200, rps=2433, p95=158.12ms</title></circle>
-<circle class="point" cx="725.3" cy="648.1" r="4" fill="#2563eb"><title>Silta PATCH /setting c=1, rps=2509, p95=0.60ms</title></circle>
-<circle class="point" cx="726.6" cy="183.2" r="4" fill="#2563eb"><title>Silta PATCH /setting c=200, rps=2514, p95=150.14ms</title></circle>
-<circle class="point" cx="728.4" cy="329.4" r="4" fill="#2563eb"><title>Silta PATCH /setting c=100, rps=2521, p95=103.10ms</title></circle>
-<circle class="point" cx="733.2" cy="325.5" r="4" fill="#2563eb"><title>Silta PATCH /setting c=100, rps=2540, p95=104.36ms</title></circle>
-<circle class="point" cx="734.5" cy="648.0" r="4" fill="#2563eb"><title>Silta PATCH /setting c=1, rps=2545, p95=0.64ms</title></circle>
-<circle class="point" cx="773.5" cy="475.9" r="4" fill="#2563eb"><title>Silta PATCH /setting c=50, rps=2696, p95=56.00ms</title></circle>
-<circle class="point" cx="782.2" cy="472.6" r="4" fill="#2563eb"><title>Silta PATCH /setting c=50, rps=2730, p95=57.05ms</title></circle>
-<circle class="point" cx="947.3" cy="624.0" r="4" fill="#2563eb"><title>Silta PATCH /setting c=10, rps=3370, p95=8.35ms</title></circle>
-<circle class="point" cx="971.3" cy="624.9" r="4" fill="#2563eb"><title>Silta PATCH /setting c=10, rps=3463, p95=8.07ms</title></circle>
-<path class="series" d="M 610.4 648.0 L 613.3 647.8 L 684.5 302.4 L 698.8 146.6 L 699.4 317.8 L 710.9 158.9 L 711.6 460.5 L 736.8 469.8 L 968.1 628.1 L 998.4 628.7" stroke="#dc2626" stroke-dasharray="7 5"/>
-<circle class="point" cx="610.4" cy="648.0" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=1, rps=2064, p95=0.65ms</title></circle>
-<circle class="point" cx="613.3" cy="647.8" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=1, rps=2075, p95=0.71ms</title></circle>
-<circle class="point" cx="684.5" cy="302.4" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=100, rps=2351, p95=111.78ms</title></circle>
-<circle class="point" cx="698.8" cy="146.6" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=200, rps=2406, p95=161.90ms</title></circle>
-<circle class="point" cx="699.4" cy="317.8" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=100, rps=2409, p95=106.84ms</title></circle>
-<circle class="point" cx="710.9" cy="158.9" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=200, rps=2453, p95=157.96ms</title></circle>
-<circle class="point" cx="711.6" cy="460.5" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=50, rps=2456, p95=60.94ms</title></circle>
-<circle class="point" cx="736.8" cy="469.8" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=50, rps=2554, p95=57.95ms</title></circle>
-<circle class="point" cx="968.1" cy="628.1" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=10, rps=3450, p95=7.06ms</title></circle>
-<circle class="point" cx="998.4" cy="628.7" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=10, rps=3568, p95=6.86ms</title></circle>
+<path class="series" d="M 740.8 648.1 L 974.0 624.1 L 789.6 472.1 L 741.7 323.5 L 726.9 164.9" stroke="#2563eb"/>
+<circle class="point" cx="740.8" cy="648.1" r="4" fill="#2563eb"><title>Silta PATCH /setting c=1, rps=2527, p95=0.62ms</title></circle>
+<circle class="point" cx="974.0" cy="624.1" r="4" fill="#2563eb"><title>Silta PATCH /setting c=10, rps=3416, p95=8.21ms</title></circle>
+<circle class="point" cx="789.6" cy="472.1" r="4" fill="#2563eb"><title>Silta PATCH /setting c=50, rps=2713, p95=56.53ms</title></circle>
+<circle class="point" cx="741.7" cy="323.5" r="4" fill="#2563eb"><title>Silta PATCH /setting c=100, rps=2531, p95=103.73ms</title></circle>
+<circle class="point" cx="726.9" cy="164.9" r="4" fill="#2563eb"><title>Silta PATCH /setting c=200, rps=2474, p95=154.13ms</title></circle>
+<path class="series" d="M 620.8 647.9 L 998.4 628.1 L 735.0 462.9 L 702.2 305.9 L 715.3 146.6" stroke="#dc2626" stroke-dasharray="7 5"/>
+<circle class="point" cx="620.8" cy="647.9" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=1, rps=2069, p95=0.68ms</title></circle>
+<circle class="point" cx="998.4" cy="628.1" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=10, rps=3509, p95=6.96ms</title></circle>
+<circle class="point" cx="735.0" cy="462.9" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=50, rps=2505, p95=59.45ms</title></circle>
+<circle class="point" cx="702.2" cy="305.9" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=100, rps=2380, p95=109.31ms</title></circle>
+<circle class="point" cx="715.3" cy="146.6" r="4" fill="#dc2626"><title>FastAPI PATCH /setting c=200, rps=2430, p95=159.93ms</title></circle>
 <text x="1072" y="52" text-anchor="end">Endpoints: PATCH /setting</text>
 </svg>

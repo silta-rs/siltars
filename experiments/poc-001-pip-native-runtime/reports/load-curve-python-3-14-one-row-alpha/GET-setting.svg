@@ -11,7 +11,7 @@
 <line class="grid" x1="78" y1="531.2" x2="1072" y2="531.2"/>
 <text x="68" y="535.2" text-anchor="end">7</text>
 <line class="grid" x1="78" y1="412.4" x2="1072" y2="412.4"/>
-<text x="68" y="416.4" text-anchor="end">14</text>
+<text x="68" y="416.4" text-anchor="end">13</text>
 <line class="grid" x1="78" y1="293.6" x2="1072" y2="293.6"/>
 <text x="68" y="297.6" text-anchor="end">20</text>
 <line class="grid" x1="78" y1="174.8" x2="1072" y2="174.8"/>
@@ -21,40 +21,30 @@
 <line class="grid" x1="78.0" y1="56" x2="78.0" y2="650"/>
 <text x="78.0" y="672" text-anchor="middle">0</text>
 <line class="grid" x1="276.8" y1="56" x2="276.8" y2="650"/>
-<text x="276.8" y="672" text-anchor="middle">3,455</text>
+<text x="276.8" y="672" text-anchor="middle">3,426</text>
 <line class="grid" x1="475.6" y1="56" x2="475.6" y2="650"/>
-<text x="475.6" y="672" text-anchor="middle">6,910</text>
+<text x="475.6" y="672" text-anchor="middle">6,852</text>
 <line class="grid" x1="674.4" y1="56" x2="674.4" y2="650"/>
-<text x="674.4" y="672" text-anchor="middle">10,365</text>
+<text x="674.4" y="672" text-anchor="middle">10,278</text>
 <line class="grid" x1="873.2" y1="56" x2="873.2" y2="650"/>
-<text x="873.2" y="672" text-anchor="middle">13,820</text>
+<text x="873.2" y="672" text-anchor="middle">13,705</text>
 <line class="grid" x1="1072.0" y1="56" x2="1072.0" y2="650"/>
-<text x="1072.0" y="672" text-anchor="middle">17,275</text>
+<text x="1072.0" y="672" text-anchor="middle">17,131</text>
 <circle cx="90" cy="48" r="5" fill="#2563eb"/>
 <text x="100" y="52">Silta</text>
 <circle cx="200" cy="48" r="5" fill="#dc2626"/>
 <text x="210" y="52">FastAPI</text>
-<path class="series" d="M 296.5 644.0 L 299.3 644.0 L 698.9 627.7 L 718.3 628.1 L 942.8 559.0 L 983.0 506.1 L 983.4 374.5 L 989.4 571.3 L 994.8 365.0 L 998.4 502.9" stroke="#2563eb"/>
-<circle class="point" cx="296.5" cy="644.0" r="4" fill="#2563eb"><title>Silta GET /setting c=1, rps=3797, p95=0.34ms</title></circle>
-<circle class="point" cx="299.3" cy="644.0" r="4" fill="#2563eb"><title>Silta GET /setting c=1, rps=3846, p95=0.35ms</title></circle>
-<circle class="point" cx="698.9" cy="627.7" r="4" fill="#2563eb"><title>Silta GET /setting c=10, rps=10790, p95=1.28ms</title></circle>
-<circle class="point" cx="718.3" cy="628.1" r="4" fill="#2563eb"><title>Silta GET /setting c=10, rps=11128, p95=1.26ms</title></circle>
-<circle class="point" cx="942.8" cy="559.0" r="4" fill="#2563eb"><title>Silta GET /setting c=50, rps=15030, p95=5.23ms</title></circle>
-<circle class="point" cx="983.0" cy="506.1" r="4" fill="#2563eb"><title>Silta GET /setting c=100, rps=15729, p95=8.28ms</title></circle>
-<circle class="point" cx="983.4" cy="374.5" r="4" fill="#2563eb"><title>Silta GET /setting c=200, rps=15734, p95=15.84ms</title></circle>
-<circle class="point" cx="989.4" cy="571.3" r="4" fill="#2563eb"><title>Silta GET /setting c=50, rps=15838, p95=4.53ms</title></circle>
-<circle class="point" cx="994.8" cy="365.0" r="4" fill="#2563eb"><title>Silta GET /setting c=200, rps=15933, p95=16.39ms</title></circle>
-<circle class="point" cx="998.4" cy="502.9" r="4" fill="#2563eb"><title>Silta GET /setting c=100, rps=15995, p95=8.46ms</title></circle>
-<path class="series" d="M 215.1 640.3 L 228.2 641.6 L 556.3 619.6 L 594.6 623.2 L 738.7 146.6 L 752.2 164.6 L 784.1 557.5 L 798.5 468.9 L 814.6 555.0 L 822.9 455.5" stroke="#dc2626" stroke-dasharray="7 5"/>
-<circle class="point" cx="215.1" cy="640.3" r="4" fill="#dc2626"><title>FastAPI GET /setting c=1, rps=2383, p95=0.56ms</title></circle>
-<circle class="point" cx="228.2" cy="641.6" r="4" fill="#dc2626"><title>FastAPI GET /setting c=1, rps=2611, p95=0.48ms</title></circle>
-<circle class="point" cx="556.3" cy="619.6" r="4" fill="#dc2626"><title>FastAPI GET /setting c=10, rps=8313, p95=1.75ms</title></circle>
-<circle class="point" cx="594.6" cy="623.2" r="4" fill="#dc2626"><title>FastAPI GET /setting c=10, rps=8978, p95=1.54ms</title></circle>
-<circle class="point" cx="738.7" cy="146.6" r="4" fill="#dc2626"><title>FastAPI GET /setting c=200, rps=11483, p95=28.94ms</title></circle>
-<circle class="point" cx="752.2" cy="164.6" r="4" fill="#dc2626"><title>FastAPI GET /setting c=200, rps=11716, p95=27.91ms</title></circle>
-<circle class="point" cx="784.1" cy="557.5" r="4" fill="#dc2626"><title>FastAPI GET /setting c=50, rps=12271, p95=5.32ms</title></circle>
-<circle class="point" cx="798.5" cy="468.9" r="4" fill="#dc2626"><title>FastAPI GET /setting c=100, rps=12521, p95=10.41ms</title></circle>
-<circle class="point" cx="814.6" cy="555.0" r="4" fill="#dc2626"><title>FastAPI GET /setting c=50, rps=12802, p95=5.46ms</title></circle>
-<circle class="point" cx="822.9" cy="455.5" r="4" fill="#dc2626"><title>FastAPI GET /setting c=100, rps=12946, p95=11.19ms</title></circle>
+<path class="series" d="M 299.7 643.9 L 713.9 627.5 L 973.6 563.6 L 998.4 501.8 L 996.7 364.7" stroke="#2563eb"/>
+<circle class="point" cx="299.7" cy="643.9" r="4" fill="#2563eb"><title>Silta GET /setting c=1, rps=3821, p95=0.35ms</title></circle>
+<circle class="point" cx="713.9" cy="627.5" r="4" fill="#2563eb"><title>Silta GET /setting c=10, rps=10959, p95=1.27ms</title></circle>
+<circle class="point" cx="973.6" cy="563.6" r="4" fill="#2563eb"><title>Silta GET /setting c=50, rps=15434, p95=4.88ms</title></circle>
+<circle class="point" cx="998.4" cy="501.8" r="4" fill="#2563eb"><title>Silta GET /setting c=100, rps=15862, p95=8.37ms</title></circle>
+<circle class="point" cx="996.7" cy="364.7" r="4" fill="#2563eb"><title>Silta GET /setting c=200, rps=15834, p95=16.11ms</title></circle>
+<path class="series" d="M 222.9 640.8 L 579.6 620.9 L 805.4 554.5 L 816.9 458.8 L 751.1 146.6" stroke="#dc2626" stroke-dasharray="7 5"/>
+<circle class="point" cx="222.9" cy="640.8" r="4" fill="#dc2626"><title>FastAPI GET /setting c=1, rps=2497, p95=0.52ms</title></circle>
+<circle class="point" cx="579.6" cy="620.9" r="4" fill="#dc2626"><title>FastAPI GET /setting c=10, rps=8645, p95=1.65ms</title></circle>
+<circle class="point" cx="805.4" cy="554.5" r="4" fill="#dc2626"><title>FastAPI GET /setting c=50, rps=12537, p95=5.39ms</title></circle>
+<circle class="point" cx="816.9" cy="458.8" r="4" fill="#dc2626"><title>FastAPI GET /setting c=100, rps=12733, p95=10.80ms</title></circle>
+<circle class="point" cx="751.1" cy="146.6" r="4" fill="#dc2626"><title>FastAPI GET /setting c=200, rps=11600, p95=28.43ms</title></circle>
 <text x="1072" y="52" text-anchor="end">Endpoints: GET /setting</text>
 </svg>

@@ -9,96 +9,66 @@
 <line class="grid" x1="78" y1="650.0" x2="1072" y2="650.0"/>
 <text x="68" y="654.0" text-anchor="end">0</text>
 <line class="grid" x1="78" y1="531.2" x2="1072" y2="531.2"/>
-<text x="68" y="535.2" text-anchor="end">30</text>
+<text x="68" y="535.2" text-anchor="end">29</text>
 <line class="grid" x1="78" y1="412.4" x2="1072" y2="412.4"/>
-<text x="68" y="416.4" text-anchor="end">60</text>
+<text x="68" y="416.4" text-anchor="end">58</text>
 <line class="grid" x1="78" y1="293.6" x2="1072" y2="293.6"/>
-<text x="68" y="297.6" text-anchor="end">90</text>
+<text x="68" y="297.6" text-anchor="end">87</text>
 <line class="grid" x1="78" y1="174.8" x2="1072" y2="174.8"/>
-<text x="68" y="178.8" text-anchor="end">120</text>
+<text x="68" y="178.8" text-anchor="end">116</text>
 <line class="grid" x1="78" y1="56.0" x2="1072" y2="56.0"/>
-<text x="68" y="60.0" text-anchor="end">150</text>
+<text x="68" y="60.0" text-anchor="end">145</text>
 <line class="grid" x1="78.0" y1="56" x2="78.0" y2="650"/>
 <text x="78.0" y="672" text-anchor="middle">0</text>
 <line class="grid" x1="276.8" y1="56" x2="276.8" y2="650"/>
-<text x="276.8" y="672" text-anchor="middle">39,386</text>
+<text x="276.8" y="672" text-anchor="middle">39,217</text>
 <line class="grid" x1="475.6" y1="56" x2="475.6" y2="650"/>
-<text x="475.6" y="672" text-anchor="middle">78,773</text>
+<text x="475.6" y="672" text-anchor="middle">78,433</text>
 <line class="grid" x1="674.4" y1="56" x2="674.4" y2="650"/>
-<text x="674.4" y="672" text-anchor="middle">118,159</text>
+<text x="674.4" y="672" text-anchor="middle">117,650</text>
 <line class="grid" x1="873.2" y1="56" x2="873.2" y2="650"/>
-<text x="873.2" y="672" text-anchor="middle">157,546</text>
+<text x="873.2" y="672" text-anchor="middle">156,867</text>
 <line class="grid" x1="1072.0" y1="56" x2="1072.0" y2="650"/>
-<text x="1072.0" y="672" text-anchor="middle">196,932</text>
+<text x="1072.0" y="672" text-anchor="middle">196,083</text>
 <circle cx="90" cy="48" r="5" fill="#2563eb"/>
 <text x="100" y="52">Silta</text>
 <circle cx="200" cy="48" r="5" fill="#dc2626"/>
 <text x="210" y="52">FastAPI</text>
-<path class="series" d="M 238.7 649.8 L 240.3 649.8 L 695.3 649.6 L 708.0 649.5 L 966.6 645.9 L 977.3 648.0 L 990.5 640.8 L 996.3 645.9 L 998.3 641.1 L 998.4 648.2" stroke="#2563eb"/>
-<circle class="point" cx="238.7" cy="649.8" r="4" fill="#2563eb"><title>Silta /ping c=1, rps=31848, p95=0.04ms</title></circle>
-<circle class="point" cx="240.3" cy="649.8" r="4" fill="#2563eb"><title>Silta /ping c=1, rps=32156, p95=0.04ms</title></circle>
-<circle class="point" cx="695.3" cy="649.6" r="4" fill="#2563eb"><title>Silta /ping c=10, rps=122309, p95=0.11ms</title></circle>
-<circle class="point" cx="708.0" cy="649.5" r="4" fill="#2563eb"><title>Silta /ping c=10, rps=124817, p95=0.11ms</title></circle>
-<circle class="point" cx="966.6" cy="645.9" r="4" fill="#2563eb"><title>Silta /ping c=100, rps=176048, p95=1.03ms</title></circle>
-<circle class="point" cx="977.3" cy="648.0" r="4" fill="#2563eb"><title>Silta /ping c=50, rps=178167, p95=0.49ms</title></circle>
-<circle class="point" cx="990.5" cy="640.8" r="4" fill="#2563eb"><title>Silta /ping c=200, rps=180779, p95=2.32ms</title></circle>
-<circle class="point" cx="996.3" cy="645.9" r="4" fill="#2563eb"><title>Silta /ping c=100, rps=181932, p95=1.03ms</title></circle>
-<circle class="point" cx="998.3" cy="641.1" r="4" fill="#2563eb"><title>Silta /ping c=200, rps=182339, p95=2.25ms</title></circle>
-<circle class="point" cx="998.4" cy="648.2" r="4" fill="#2563eb"><title>Silta /ping c=50, rps=182345, p95=0.46ms</title></circle>
-<path class="series" d="M 168.0 649.7 L 169.1 649.7 L 267.5 619.8 L 268.2 643.4 L 276.6 621.6 L 279.2 648.7 L 280.9 638.4 L 280.9 648.7 L 283.4 638.2 L 284.3 644.5" stroke="#dc2626" stroke-dasharray="7 5"/>
-<circle class="point" cx="168.0" cy="649.7" r="4" fill="#dc2626"><title>FastAPI /ping c=1, rps=17840, p95=0.08ms</title></circle>
-<circle class="point" cx="169.1" cy="649.7" r="4" fill="#dc2626"><title>FastAPI /ping c=1, rps=18056, p95=0.07ms</title></circle>
-<circle class="point" cx="267.5" cy="619.8" r="4" fill="#dc2626"><title>FastAPI /ping c=200, rps=37535, p95=7.63ms</title></circle>
-<circle class="point" cx="268.2" cy="643.4" r="4" fill="#dc2626"><title>FastAPI /ping c=50, rps=37689, p95=1.67ms</title></circle>
-<circle class="point" cx="276.6" cy="621.6" r="4" fill="#dc2626"><title>FastAPI /ping c=200, rps=39344, p95=7.17ms</title></circle>
-<circle class="point" cx="279.2" cy="648.7" r="4" fill="#dc2626"><title>FastAPI /ping c=10, rps=39867, p95=0.32ms</title></circle>
-<circle class="point" cx="280.9" cy="638.4" r="4" fill="#dc2626"><title>FastAPI /ping c=100, rps=40201, p95=2.92ms</title></circle>
-<circle class="point" cx="280.9" cy="648.7" r="4" fill="#dc2626"><title>FastAPI /ping c=10, rps=40206, p95=0.32ms</title></circle>
-<circle class="point" cx="283.4" cy="638.2" r="4" fill="#dc2626"><title>FastAPI /ping c=100, rps=40686, p95=2.98ms</title></circle>
-<circle class="point" cx="284.3" cy="644.5" r="4" fill="#dc2626"><title>FastAPI /ping c=50, rps=40878, p95=1.38ms</title></circle>
-<path class="series" d="M 95.9 648.4 L 95.9 648.3 L 127.6 644.3 L 128.7 644.4 L 137.7 600.7 L 142.7 568.0 L 143.4 570.2 L 145.1 629.1 L 146.6 628.7 L 146.9 610.3" stroke="#2563eb"/>
-<circle class="point" cx="95.9" cy="648.4" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=1, rps=3555, p95=0.41ms</title></circle>
-<circle class="point" cx="95.9" cy="648.3" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=1, rps=3555, p95=0.42ms</title></circle>
-<circle class="point" cx="127.6" cy="644.3" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=10, rps=9820, p95=1.44ms</title></circle>
-<circle class="point" cx="128.7" cy="644.4" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=10, rps=10035, p95=1.40ms</title></circle>
-<circle class="point" cx="137.7" cy="600.7" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=100, rps=11832, p95=12.46ms</title></circle>
-<circle class="point" cx="142.7" cy="568.0" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=200, rps=12811, p95=20.70ms</title></circle>
-<circle class="point" cx="143.4" cy="570.2" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=200, rps=12955, p95=20.14ms</title></circle>
-<circle class="point" cx="145.1" cy="629.1" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=50, rps=13288, p95=5.28ms</title></circle>
-<circle class="point" cx="146.6" cy="628.7" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=50, rps=13590, p95=5.38ms</title></circle>
-<circle class="point" cx="146.9" cy="610.3" r="5" fill="#2563eb"><title>Silta /rates/EUR/USD c=100, rps=13655, p95=10.02ms</title></circle>
-<path class="series" d="M 86.5 645.5 L 89.9 647.7 L 114.0 641.9 L 115.3 436.9 L 117.5 643.0 L 118.8 450.1 L 126.5 581.7 L 127.5 625.3 L 128.4 586.8 L 130.3 624.6" stroke="#dc2626" stroke-dasharray="7 5"/>
-<circle class="point" cx="86.5" cy="645.5" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=1, rps=1681, p95=1.13ms</title></circle>
-<circle class="point" cx="89.9" cy="647.7" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=1, rps=2357, p95=0.57ms</title></circle>
-<circle class="point" cx="114.0" cy="641.9" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=10, rps=7134, p95=2.03ms</title></circle>
-<circle class="point" cx="115.3" cy="436.9" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=200, rps=7386, p95=53.80ms</title></circle>
-<circle class="point" cx="117.5" cy="643.0" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=10, rps=7822, p95=1.77ms</title></circle>
-<circle class="point" cx="118.8" cy="450.1" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=200, rps=8091, p95=50.45ms</title></circle>
-<circle class="point" cx="126.5" cy="581.7" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=100, rps=9601, p95=17.23ms</title></circle>
-<circle class="point" cx="127.5" cy="625.3" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=50, rps=9801, p95=6.24ms</title></circle>
-<circle class="point" cx="128.4" cy="586.8" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=100, rps=9988, p95=15.95ms</title></circle>
-<circle class="point" cx="130.3" cy="624.6" r="5" fill="#dc2626"><title>FastAPI /rates/EUR/USD c=50, rps=10362, p95=6.40ms</title></circle>
-<path class="series" d="M 87.7 647.1 L 87.9 647.3 L 103.7 638.5 L 107.4 640.5 L 109.0 427.2 L 109.8 563.2 L 111.2 566.1 L 112.2 607.6 L 112.3 493.5 L 113.4 609.2" stroke="#2563eb"/>
-<circle class="point" cx="87.7" cy="647.1" r="6" fill="#2563eb"><title>Silta /rates c=1, rps=1921, p95=0.73ms</title></circle>
-<circle class="point" cx="87.9" cy="647.3" r="6" fill="#2563eb"><title>Silta /rates c=1, rps=1971, p95=0.68ms</title></circle>
-<circle class="point" cx="103.7" cy="638.5" r="6" fill="#2563eb"><title>Silta /rates c=10, rps=5101, p95=2.90ms</title></circle>
-<circle class="point" cx="107.4" cy="640.5" r="6" fill="#2563eb"><title>Silta /rates c=10, rps=5832, p95=2.40ms</title></circle>
-<circle class="point" cx="109.0" cy="427.2" r="6" fill="#2563eb"><title>Silta /rates c=200, rps=6148, p95=56.24ms</title></circle>
-<circle class="point" cx="109.8" cy="563.2" r="6" fill="#2563eb"><title>Silta /rates c=100, rps=6306, p95=21.92ms</title></circle>
-<circle class="point" cx="111.2" cy="566.1" r="6" fill="#2563eb"><title>Silta /rates c=100, rps=6577, p95=21.18ms</title></circle>
-<circle class="point" cx="112.2" cy="607.6" r="6" fill="#2563eb"><title>Silta /rates c=50, rps=6767, p95=10.69ms</title></circle>
-<circle class="point" cx="112.3" cy="493.5" r="6" fill="#2563eb"><title>Silta /rates c=200, rps=6791, p95=39.49ms</title></circle>
-<circle class="point" cx="113.4" cy="609.2" r="6" fill="#2563eb"><title>Silta /rates c=50, rps=7023, p95=10.30ms</title></circle>
-<path class="series" d="M 83.4 642.8 L 84.4 645.8 L 91.3 146.6 L 91.7 442.7 L 91.7 552.5 L 91.8 463.6 L 91.8 177.9 L 92.4 567.3 L 92.6 631.8 L 92.6 633.6" stroke="#dc2626" stroke-dasharray="7 5"/>
-<circle class="point" cx="83.4" cy="642.8" r="6" fill="#dc2626"><title>FastAPI /rates c=1, rps=1061, p95=1.83ms</title></circle>
-<circle class="point" cx="84.4" cy="645.8" r="6" fill="#dc2626"><title>FastAPI /rates c=1, rps=1265, p95=1.05ms</title></circle>
-<circle class="point" cx="91.3" cy="146.6" r="6" fill="#dc2626"><title>FastAPI /rates c=200, rps=2639, p95=127.06ms</title></circle>
-<circle class="point" cx="91.7" cy="442.7" r="6" fill="#dc2626"><title>FastAPI /rates c=100, rps=2713, p95=52.33ms</title></circle>
-<circle class="point" cx="91.7" cy="552.5" r="6" fill="#dc2626"><title>FastAPI /rates c=50, rps=2720, p95=24.61ms</title></circle>
-<circle class="point" cx="91.8" cy="463.6" r="6" fill="#dc2626"><title>FastAPI /rates c=100, rps=2726, p95=47.05ms</title></circle>
-<circle class="point" cx="91.8" cy="177.9" r="6" fill="#dc2626"><title>FastAPI /rates c=200, rps=2734, p95=119.17ms</title></circle>
-<circle class="point" cx="92.4" cy="567.3" r="6" fill="#dc2626"><title>FastAPI /rates c=50, rps=2855, p95=20.86ms</title></circle>
-<circle class="point" cx="92.6" cy="631.8" r="6" fill="#dc2626"><title>FastAPI /rates c=10, rps=2887, p95=4.59ms</title></circle>
-<circle class="point" cx="92.6" cy="633.6" r="6" fill="#dc2626"><title>FastAPI /rates c=10, rps=2899, p95=4.15ms</title></circle>
-<text x="1072" y="52" text-anchor="end">Endpoints: /ping / /rates/EUR/USD / /rates</text>
+<path class="series" d="M 240.2 649.8 L 704.4 649.5 L 991.8 648.1 L 985.3 645.8 L 998.4 640.7" stroke="#2563eb"/>
+<circle class="point" cx="240.2" cy="649.8" r="4" fill="#2563eb"><title>Silta GET /ping c=1, rps=32002, p95=0.04ms</title></circle>
+<circle class="point" cx="704.4" cy="649.5" r="4" fill="#2563eb"><title>Silta GET /ping c=10, rps=123563, p95=0.11ms</title></circle>
+<circle class="point" cx="991.8" cy="648.1" r="4" fill="#2563eb"><title>Silta GET /ping c=50, rps=180256, p95=0.47ms</title></circle>
+<circle class="point" cx="985.3" cy="645.8" r="4" fill="#2563eb"><title>Silta GET /ping c=100, rps=178990, p95=1.03ms</title></circle>
+<circle class="point" cx="998.4" cy="640.7" r="4" fill="#2563eb"><title>Silta GET /ping c=200, rps=181559, p95=2.28ms</title></circle>
+<path class="series" d="M 169.0 649.7 L 281.0 648.7 L 277.1 643.8 L 283.0 637.9 L 272.9 619.8" stroke="#dc2626" stroke-dasharray="7 5"/>
+<circle class="point" cx="169.0" cy="649.7" r="4" fill="#dc2626"><title>FastAPI GET /ping c=1, rps=17948, p95=0.07ms</title></circle>
+<circle class="point" cx="281.0" cy="648.7" r="4" fill="#dc2626"><title>FastAPI GET /ping c=10, rps=40036, p95=0.32ms</title></circle>
+<circle class="point" cx="277.1" cy="643.8" r="4" fill="#dc2626"><title>FastAPI GET /ping c=50, rps=39283, p95=1.52ms</title></circle>
+<circle class="point" cx="283.0" cy="637.9" r="4" fill="#dc2626"><title>FastAPI GET /ping c=100, rps=40444, p95=2.95ms</title></circle>
+<circle class="point" cx="272.9" cy="619.8" r="4" fill="#dc2626"><title>FastAPI GET /ping c=200, rps=38440, p95=7.40ms</title></circle>
+<path class="series" d="M 87.9 647.1 L 105.7 639.2 L 113.0 607.1 L 110.7 561.9 L 110.8 454.3" stroke="#2563eb"/>
+<circle class="point" cx="87.9" cy="647.1" r="5" fill="#2563eb"><title>Silta GET /rates c=1, rps=1946, p95=0.70ms</title></circle>
+<circle class="point" cx="105.7" cy="639.2" r="5" fill="#2563eb"><title>Silta GET /rates c=10, rps=5466, p95=2.65ms</title></circle>
+<circle class="point" cx="113.0" cy="607.1" r="5" fill="#2563eb"><title>Silta GET /rates c=50, rps=6895, p95=10.50ms</title></circle>
+<circle class="point" cx="110.7" cy="561.9" r="5" fill="#2563eb"><title>Silta GET /rates c=100, rps=6441, p95=21.55ms</title></circle>
+<circle class="point" cx="110.8" cy="454.3" r="5" fill="#2563eb"><title>Silta GET /rates c=200, rps=6470, p95=47.87ms</title></circle>
+<path class="series" d="M 83.9 644.1 L 92.7 632.1 L 92.1 557.0 L 91.8 446.8 L 91.6 146.6" stroke="#dc2626" stroke-dasharray="7 5"/>
+<circle class="point" cx="83.9" cy="644.1" r="5" fill="#dc2626"><title>FastAPI GET /rates c=1, rps=1163, p95=1.44ms</title></circle>
+<circle class="point" cx="92.7" cy="632.1" r="5" fill="#dc2626"><title>FastAPI GET /rates c=10, rps=2893, p95=4.37ms</title></circle>
+<circle class="point" cx="92.1" cy="557.0" r="5" fill="#dc2626"><title>FastAPI GET /rates c=50, rps=2787, p95=22.74ms</title></circle>
+<circle class="point" cx="91.8" cy="446.8" r="5" fill="#dc2626"><title>FastAPI GET /rates c=100, rps=2719, p95=49.69ms</title></circle>
+<circle class="point" cx="91.6" cy="146.6" r="5" fill="#dc2626"><title>FastAPI GET /rates c=200, rps=2687, p95=123.11ms</title></circle>
+<path class="series" d="M 96.0 648.3 L 128.3 644.2 L 146.1 628.2 L 142.6 604.0 L 143.3 566.5" stroke="#2563eb"/>
+<circle class="point" cx="96.0" cy="648.3" r="6" fill="#2563eb"><title>Silta GET /rates/EUR/USD c=1, rps=3555, p95=0.42ms</title></circle>
+<circle class="point" cx="128.3" cy="644.2" r="6" fill="#2563eb"><title>Silta GET /rates/EUR/USD c=10, rps=9928, p95=1.42ms</title></circle>
+<circle class="point" cx="146.1" cy="628.2" r="6" fill="#2563eb"><title>Silta GET /rates/EUR/USD c=50, rps=13439, p95=5.33ms</title></circle>
+<circle class="point" cx="142.6" cy="604.0" r="6" fill="#2563eb"><title>Silta GET /rates/EUR/USD c=100, rps=12743, p95=11.24ms</title></circle>
+<circle class="point" cx="143.3" cy="566.5" r="6" fill="#2563eb"><title>Silta GET /rates/EUR/USD c=200, rps=12883, p95=20.42ms</title></circle>
+<path class="series" d="M 88.2 646.5 L 115.9 642.2 L 129.1 624.1 L 127.7 582.2 L 117.2 436.9" stroke="#dc2626" stroke-dasharray="7 5"/>
+<circle class="point" cx="88.2" cy="646.5" r="6" fill="#dc2626"><title>FastAPI GET /rates/EUR/USD c=1, rps=2019, p95=0.85ms</title></circle>
+<circle class="point" cx="115.9" cy="642.2" r="6" fill="#dc2626"><title>FastAPI GET /rates/EUR/USD c=10, rps=7478, p95=1.90ms</title></circle>
+<circle class="point" cx="129.1" cy="624.1" r="6" fill="#dc2626"><title>FastAPI GET /rates/EUR/USD c=50, rps=10081, p95=6.32ms</title></circle>
+<circle class="point" cx="127.7" cy="582.2" r="6" fill="#dc2626"><title>FastAPI GET /rates/EUR/USD c=100, rps=9795, p95=16.59ms</title></circle>
+<circle class="point" cx="117.2" cy="436.9" r="6" fill="#dc2626"><title>FastAPI GET /rates/EUR/USD c=200, rps=7738, p95=52.13ms</title></circle>
+<text x="1072" y="52" text-anchor="end">Endpoints: GET /ping / GET /rates / GET /rates/EUR/USD</text>
 </svg>

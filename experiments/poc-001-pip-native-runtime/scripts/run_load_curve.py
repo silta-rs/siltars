@@ -8,7 +8,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 @dataclass(frozen=True)
@@ -273,6 +273,7 @@ def slug(value: str) -> str:
 
 
 def write_svg(path: Path, points: list[Point]) -> None:
+    points = average_points(points)
     width = 1100
     height = 720
     margin_left = 78
@@ -356,7 +357,7 @@ def write_svg(path: Path, points: list[Point]) -> None:
         for label in labels:
             series = sorted(
                 [point for point in endpoint_points if point.label == label],
-                key=lambda point: point.rps,
+                key=lambda point: point.concurrency,
             )
             if not series:
                 continue
@@ -387,6 +388,49 @@ def write_svg(path: Path, points: list[Point]) -> None:
     )
     lines.append("</svg>")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def average_points(points: list[Point]) -> list[Point]:
+    groups: dict[tuple[str, str, str, int], list[Point]] = {}
+    for point in points:
+        key = (point.label, point.method, point.endpoint, point.concurrency)
+        groups.setdefault(key, []).append(point)
+
+    averaged: list[Point] = []
+    for (label, method, endpoint, concurrency), group in groups.items():
+        averaged.append(
+            Point(
+                label=label,
+                method=method,
+                endpoint=endpoint,
+                run=0,
+                concurrency=concurrency,
+                requests=group[0].requests,
+                duration=group[0].duration,
+                success_rate=mean(point.success_rate for point in group),
+                rps=mean(point.rps for point in group),
+                average_ms=mean(point.average_ms for point in group),
+                p50_ms=mean(point.p50_ms for point in group),
+                p95_ms=mean(point.p95_ms for point in group),
+                p99_ms=mean(point.p99_ms for point in group),
+                status_codes="averaged",
+            )
+        )
+
+    return sorted(
+        averaged,
+        key=lambda point: (
+            point.method,
+            point.endpoint,
+            point.label,
+            point.concurrency,
+        ),
+    )
+
+
+def mean(values: Iterable[float]) -> float:
+    collected = list(values)
+    return sum(collected) / len(collected)
 
 
 if __name__ == "__main__":

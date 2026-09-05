@@ -49,6 +49,9 @@ claim.
 
 ## Chart
 
+The chart plots averaged points per concurrency level. Raw per-run points stay
+available in CSV and `oha` JSON files.
+
 ![Silta vs FastAPI big JSON load curve](GET-rates-bulk.svg)
 
 ## Raw Data

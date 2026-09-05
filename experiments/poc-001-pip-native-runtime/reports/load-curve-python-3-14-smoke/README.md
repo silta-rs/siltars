@@ -33,6 +33,9 @@ developer machine.
 
 ## Charts
 
+Charts plot averaged points per concurrency level. Raw per-run points stay
+available in CSV and `oha` JSON files.
+
 ### Larger JSON Response
 
 ![Silta vs FastAPI /rates](rates.svg)

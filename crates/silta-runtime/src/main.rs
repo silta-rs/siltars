@@ -64,6 +64,49 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
                     .ok_or_else(|| anyhow::anyhow!("--port needs a value"))?;
                 config.port = value.parse::<u16>()?;
             }
+            "--request-timeout-ms" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--request-timeout-ms needs a value"))?;
+                config.request_timeout = Duration::from_millis(value.parse::<u64>()?);
+            }
+            "--metrics-listen" => {
+                config.metrics.listen = Some(
+                    args.next()
+                        .ok_or_else(|| anyhow::anyhow!("--metrics-listen needs a value"))?
+                        .parse()?,
+                );
+            }
+            "--otlp-metrics-endpoint" => {
+                config.metrics.otlp_endpoint = Some(
+                    args.next()
+                        .ok_or_else(|| anyhow::anyhow!("--otlp-metrics-endpoint needs a value"))?,
+                );
+            }
+            "--service-name" => {
+                config.metrics.service_name = Some(
+                    args.next()
+                        .ok_or_else(|| anyhow::anyhow!("--service-name needs a value"))?,
+                );
+            }
+            "--metrics-export-interval-ms" => {
+                config.metrics.export_interval = Duration::from_millis(
+                    args.next()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("--metrics-export-interval-ms needs a value")
+                        })?
+                        .parse()?,
+                );
+            }
+            "--metrics-export-timeout-ms" => {
+                config.metrics.export_timeout = Duration::from_millis(
+                    args.next()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("--metrics-export-timeout-ms needs a value")
+                        })?
+                        .parse()?,
+                );
+            }
             "--database-url" => {
                 let value = args
                     .next()
@@ -88,6 +131,18 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
                     .ok_or_else(|| anyhow::anyhow!("--db-acquire-timeout-ms needs a value"))?;
                 config.db_acquire_timeout = Duration::from_millis(value.parse::<u64>()?);
             }
+            "--python-bridge-executable" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--python-bridge-executable needs a value"))?;
+                config.python_bridge_executable = Some(value);
+            }
+            "--python-bridge-target" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--python-bridge-target needs a value"))?;
+                config.python_bridge_target = Some(value);
+            }
             "--definition" => {
                 let value = args
                     .next()
@@ -110,6 +165,37 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
 
 fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
     let mut config = RuntimeConfig::default();
+    config.request_timeout = env::var("SILTA_REQUEST_TIMEOUT_MS")
+        .ok()
+        .map(|value| value.parse::<u64>().map(Duration::from_millis))
+        .transpose()?
+        .unwrap_or(config.request_timeout);
+    config.metrics.listen = env::var("SILTA_METRICS_LISTEN")
+        .ok()
+        .map(|value| value.parse())
+        .transpose()?;
+    config.metrics.otlp_endpoint = match env::var("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT").ok() {
+        Some(endpoint) => Some(endpoint),
+        None => env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+            .ok()
+            .map(|base| {
+                let mut url = reqwest::Url::parse(&base)?;
+                url.set_path(&format!("{}/v1/metrics", url.path().trim_end_matches('/')));
+                Ok::<_, anyhow::Error>(url.to_string())
+            })
+            .transpose()?,
+    };
+    config.metrics.service_name = env::var("OTEL_SERVICE_NAME").ok();
+    config.metrics.export_interval = env::var("OTEL_METRIC_EXPORT_INTERVAL")
+        .ok()
+        .map(|value| value.parse::<u64>().map(Duration::from_millis))
+        .transpose()?
+        .unwrap_or(config.metrics.export_interval);
+    config.metrics.export_timeout = env::var("OTEL_METRIC_EXPORT_TIMEOUT")
+        .ok()
+        .map(|value| value.parse::<u64>().map(Duration::from_millis))
+        .transpose()?
+        .unwrap_or(config.metrics.export_timeout);
     config.database_url = env::var("DATABASE_URL").ok();
     config.db_min_connections = env::var("SILTA_DB_MIN_CONNECTIONS")
         .ok()
@@ -126,6 +212,8 @@ fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
         .map(|value| value.parse::<u64>().map(Duration::from_millis))
         .transpose()?
         .unwrap_or(config.db_acquire_timeout);
+    config.python_bridge_executable = env::var("SILTA_PYTHON_BRIDGE_EXECUTABLE").ok();
+    config.python_bridge_target = env::var("SILTA_PYTHON_BRIDGE_TARGET").ok();
 
     Ok(config)
 }
@@ -134,6 +222,9 @@ fn print_help() {
     println!(
         "silta-runtime --host 127.0.0.1 --port 8000 [--definition app.json] \
          [--database-url postgresql://...] [--db-min-connections 1] \
-         [--db-max-connections 10]"
+         [--db-max-connections 10] [--python-bridge-executable python] \
+         [--python-bridge-target app.py:app] [--request-timeout-ms 30000] \
+         [--metrics-listen 127.0.0.1:9464] [--otlp-metrics-endpoint http://localhost:4318/v1/metrics] \
+         [--service-name my-api] [--metrics-export-interval-ms 15000] [--metrics-export-timeout-ms 2000]"
     );
 }

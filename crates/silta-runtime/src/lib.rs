@@ -7,25 +7,40 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::future::IntoFuture;
+use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
-use axum::extract::{Path, State};
+use axum::body::Bytes;
+use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, head, options, patch, post, put, MethodRouter};
+use axum::Extension;
 use axum::{Json, Router};
 use serde::Serialize;
 use serde_json::{json, Value};
-use silta_core::{Application, Method, Route};
+use silta_core::{Application, ExecutionPlanError, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
+use sqlx::{Connection, PgConnection, PgPool};
 use tokio::net::TcpListener;
+use tokio::sync::oneshot;
+use tokio::time::Instant;
+
+mod bridge;
+mod metrics;
+use bridge::PythonBridge;
+pub use metrics::MetricsConfig;
+use metrics::{HttpMetrics, Telemetry};
 
 /// Errors returned while preparing the runtime.
 #[derive(Debug)]
 pub enum RuntimeError {
+    /// The Python-produced execution plan is unsupported or contradictory.
+    ExecutionPlan(ExecutionPlanError),
     /// Route metadata could not be converted into a route table.
     RouteTable(RouteTableError),
     /// The runtime could not bind its HTTP listener.
@@ -34,15 +49,42 @@ pub enum RuntimeError {
     Server(std::io::Error),
     /// The PostgreSQL pool could not be created.
     Database(sqlx::Error),
+    /// The PostgreSQL server rejected or did not accept a connection.
+    DatabaseConnectionRefused(sqlx::Error),
+    /// A route path is malformed.
+    InvalidRoutePath { path: String, reason: String },
+    /// The Python bridge process could not be started.
+    PythonBridge(std::io::Error),
+    /// Python bridge configuration does not satisfy the prepared plan.
+    InvalidPythonBridgeConfig(String),
+    /// Request timeout is outside the supported range.
+    InvalidRequestTimeout,
+    /// Invalid metrics configuration or exporter initialization.
+    Metrics(String),
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ExecutionPlan(error) => write!(f, "execution plan error: {error}"),
             Self::RouteTable(error) => write!(f, "route table error: {error}"),
             Self::Bind(error) => write!(f, "bind error: {error}"),
             Self::Server(error) => write!(f, "server error: {error}"),
             Self::Database(error) => write!(f, "database error: {error}"),
+            Self::DatabaseConnectionRefused(error) => {
+                write!(f, "database connection refused: {error}")
+            }
+            Self::InvalidRoutePath { path, reason } => {
+                write!(f, "invalid route path {path:?}: {reason}")
+            }
+            Self::PythonBridge(error) => write!(f, "python bridge error: {error}"),
+            Self::Metrics(message) => write!(f, "metrics error: {message}"),
+            Self::InvalidRequestTimeout => {
+                write!(f, "request timeout must be between 1 ms and 24 hours")
+            }
+            Self::InvalidPythonBridgeConfig(reason) => {
+                write!(f, "invalid python bridge configuration: {reason}")
+            }
         }
     }
 }
@@ -50,10 +92,17 @@ impl fmt::Display for RuntimeError {
 impl Error for RuntimeError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::ExecutionPlan(error) => Some(error),
             Self::RouteTable(error) => Some(error),
             Self::Bind(error) => Some(error),
             Self::Server(error) => Some(error),
             Self::Database(error) => Some(error),
+            Self::DatabaseConnectionRefused(error) => Some(error),
+            Self::InvalidRoutePath { .. } => None,
+            Self::PythonBridge(error) => Some(error),
+            Self::InvalidPythonBridgeConfig(_) | Self::InvalidRequestTimeout | Self::Metrics(_) => {
+                None
+            }
         }
     }
 }
@@ -61,6 +110,12 @@ impl Error for RuntimeError {
 impl From<RouteTableError> for RuntimeError {
     fn from(error: RouteTableError) -> Self {
         Self::RouteTable(error)
+    }
+}
+
+impl From<ExecutionPlanError> for RuntimeError {
+    fn from(error: ExecutionPlanError) -> Self {
+        Self::ExecutionPlan(error)
     }
 }
 
@@ -77,6 +132,10 @@ pub struct RuntimeConfig {
     pub host: IpAddr,
     /// Port to bind.
     pub port: u16,
+    /// Deadline from receipt of HTTP headers through response creation.
+    pub request_timeout: Duration,
+    /// Optional native Prometheus and OTLP metric exporters.
+    pub metrics: MetricsConfig,
     /// PostgreSQL connection URL used by native database routes.
     pub database_url: Option<String>,
     /// Minimum database connections kept by the native pool.
@@ -85,6 +144,10 @@ pub struct RuntimeConfig {
     pub db_max_connections: u32,
     /// Maximum time to wait for a database connection from the pool.
     pub db_acquire_timeout: Duration,
+    /// Python executable used by bridge routes.
+    pub python_bridge_executable: Option<String>,
+    /// Python app target used by bridge routes.
+    pub python_bridge_target: Option<String>,
 }
 
 impl Default for RuntimeConfig {
@@ -92,10 +155,14 @@ impl Default for RuntimeConfig {
         Self {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 8000,
+            request_timeout: Duration::from_secs(30),
+            metrics: MetricsConfig::default(),
             database_url: None,
             db_min_connections: 1,
             db_max_connections: 10,
             db_acquire_timeout: Duration::from_secs(5),
+            python_bridge_executable: None,
+            python_bridge_target: None,
         }
     }
 }
@@ -110,6 +177,10 @@ pub struct Runtime {
 impl Runtime {
     /// Prepares runtime state from an application description.
     pub fn prepare(application: Application) -> Result<Self, RuntimeError> {
+        application.validate()?;
+        for route in application.routes() {
+            axum_path(route.path())?;
+        }
         let route_table = RouteTable::from_routes(application.routes().iter().cloned())?;
 
         Ok(Self {
@@ -130,38 +201,137 @@ impl Runtime {
 
     /// Starts the native HTTP runtime.
     pub async fn serve(self, config: RuntimeConfig) -> Result<(), RuntimeError> {
+        // Validate the complete configuration before opening a DB connection
+        // or starting a worker.
+        validate_request_timeout(config.request_timeout)?;
+        config.metrics.validate()?;
+        let bridge_config = python_bridge_config(&self.application, &config)?;
         let pool = match config.database_url.as_deref() {
-            Some(database_url) => Some(
-                PgPoolOptions::new()
-                    .min_connections(config.db_min_connections)
-                    .max_connections(config.db_max_connections)
-                    .acquire_timeout(config.db_acquire_timeout)
-                    .connect(database_url)
-                    .await?,
-            ),
+            Some(database_url) => Some(create_pool(database_url, &config).await?),
             None => None,
         };
-
-        let state = AppState { pool };
-        let app = native_router(&self.application, state);
         let address = SocketAddr::new(config.host, config.port);
         let listener = TcpListener::bind(address)
             .await
             .map_err(RuntimeError::Bind)?;
+        let telemetry = Telemetry::start(&config.metrics, self.application.name()).await?;
+        let http_metrics = match telemetry
+            .metrics
+            .clone()
+            .map(|metrics| HttpMetrics::new(metrics, &self.application))
+            .transpose()
+        {
+            Ok(metrics) => metrics,
+            Err(error) => {
+                telemetry.shutdown().await;
+                return Err(error);
+            }
+        };
+        let python_bridge = match bridge_config {
+            Some((executable, target)) => {
+                match PythonBridge::spawn(executable, target, telemetry.metrics.clone()).await {
+                    Ok(bridge) => Some(bridge),
+                    Err(error) => {
+                        telemetry.shutdown().await;
+                        return Err(error);
+                    }
+                }
+            }
+            None => None,
+        };
 
-        axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
-            .await
-            .map_err(RuntimeError::Server)
+        let state = AppState {
+            pool,
+            python_bridge: python_bridge.clone(),
+        };
+        let app = match native_router(&self.application, state) {
+            Ok(app) => app.layer(middleware::from_fn_with_state(
+                config.request_timeout,
+                request_deadline,
+            )),
+            Err(error) => {
+                let cleanup = if let Some(bridge) = python_bridge {
+                    bridge.shutdown().await
+                } else {
+                    Ok(())
+                };
+                telemetry.shutdown().await;
+                cleanup?;
+                return Err(error);
+            }
+        };
+
+        let app = match http_metrics {
+            Some(metrics) => app.layer(middleware::from_fn_with_state(metrics, metrics::observe)),
+            None => app,
+        };
+        let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        let server = axum::serve(listener, app)
+            .with_graceful_shutdown(async {
+                let _ = stop_rx.await;
+            })
+            .into_future();
+        tokio::pin!(server);
+        let result = tokio::select! {
+            result = &mut server => result,
+            signal = shutdown_signal() => {
+                if let Some(bridge) = &python_bridge { bridge.begin_drain(); }
+                let _ = stop_tx.send(());
+                match signal {
+                    Err(error) => Err(error),
+                    Ok(()) => match tokio::time::timeout(Duration::from_secs(5), &mut server).await {
+                        Ok(result) => result,
+                        Err(_) => {
+                            eprintln!("silta-runtime: shutdown grace period expired; stopping Python worker");
+                            Ok(())
+                        }
+                    },
+                }
+            }
+        };
+        // The supervisor owns the child and reaps it before shutdown completes.
+        let cleanup = if let Some(bridge) = python_bridge {
+            bridge.shutdown().await
+        } else {
+            Ok(())
+        };
+        telemetry.shutdown().await;
+        cleanup?;
+        result.map_err(RuntimeError::Server)
+    }
+}
+
+fn validate_request_timeout(timeout: Duration) -> Result<(), RuntimeError> {
+    if timeout < Duration::from_millis(1) || timeout > Duration::from_secs(86400) {
+        return Err(RuntimeError::InvalidRequestTimeout);
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+struct RequestDeadline(Instant);
+
+async fn request_deadline(
+    State(timeout): State<Duration>,
+    mut request: Request,
+    next: Next,
+) -> axum::response::Response {
+    let deadline = Instant::now() + timeout;
+    request.extensions_mut().insert(RequestDeadline(deadline));
+    match tokio::time::timeout_at(deadline, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => RuntimeRouteError::RequestTimeout.into_response(),
     }
 }
 
 /// Builds the bootstrap native HTTP router from an application description.
-pub fn native_router(application: &Application, state: AppState) -> Router {
+pub fn native_router(application: &Application, state: AppState) -> Result<Router, RuntimeError> {
+    application.validate()?;
+    RouteTable::from_routes(application.routes().iter().cloned())?;
     let mut routes: BTreeMap<String, MethodRouter<AppState>> = BTreeMap::new();
 
     for route in application.routes() {
-        let path = axum_path(route.path());
+        let path = axum_path(route.path())?;
         let method_router = method_router_for_route(route);
 
         routes
@@ -177,36 +347,166 @@ pub fn native_router(application: &Application, state: AppState) -> Router {
         router = router.route(&path, method_router);
     }
 
-    router.with_state(state)
+    Ok(router.with_state(state))
 }
 
-fn axum_path(path: &str) -> String {
+fn python_bridge_config<'a>(
+    application: &Application,
+    config: &'a RuntimeConfig,
+) -> Result<Option<(&'a str, &'a str)>, RuntimeError> {
+    let requires_python = application.routes().iter().any(Route::python_handler);
+    match (
+        config.python_bridge_executable.as_deref(),
+        config.python_bridge_target.as_deref(),
+    ) {
+        (Some(executable), Some(target))
+            if !executable.trim().is_empty() && !target.trim().is_empty() =>
+        {
+            Ok(requires_python.then_some((executable, target)))
+        }
+        (None, None) if !requires_python => Ok(None),
+        _ => Err(RuntimeError::InvalidPythonBridgeConfig(
+            "Python routes require a nonempty executable and target; configure both or neither"
+                .to_owned(),
+        )),
+    }
+}
+
+async fn create_pool(database_url: &str, config: &RuntimeConfig) -> Result<PgPool, RuntimeError> {
+    PgConnection::connect(database_url)
+        .await
+        .map_err(|error| {
+            if is_connection_refused(&error) {
+                RuntimeError::DatabaseConnectionRefused(error)
+            } else {
+                RuntimeError::Database(error)
+            }
+        })?
+        .close()
+        .await
+        .map_err(RuntimeError::Database)?;
+
+    PgPoolOptions::new()
+        .min_connections(config.db_min_connections)
+        .max_connections(config.db_max_connections)
+        .acquire_timeout(config.db_acquire_timeout)
+        .connect(database_url)
+        .await
+        .map_err(RuntimeError::Database)
+}
+
+fn is_connection_refused(error: &sqlx::Error) -> bool {
+    let mut source = error.source();
+    while let Some(error) = source {
+        if let Some(io_error) = error.downcast_ref::<std::io::Error>() {
+            return io_error.kind() == std::io::ErrorKind::ConnectionRefused;
+        }
+        source = error.source();
+    }
+
+    error.to_string().contains("Connection refused")
+}
+
+fn axum_path(path: &str) -> Result<String, RuntimeError> {
+    validate_route_path(path)?;
+
     let mut converted = String::with_capacity(path.len());
     let mut parameter = false;
+    let mut parameter_name = String::new();
 
     for character in path.chars() {
         match character {
             '{' => {
+                if parameter {
+                    return Err(invalid_route_path(path, "nested route parameter"));
+                }
                 parameter = true;
+                parameter_name.clear();
                 converted.push(':');
             }
             '}' => {
+                if !parameter {
+                    return Err(invalid_route_path(
+                        path,
+                        "closing brace without opening brace",
+                    ));
+                }
+                if parameter_name.is_empty()
+                    || !parameter_name
+                        .chars()
+                        .all(|character| character == '_' || character.is_ascii_alphanumeric())
+                    || parameter_name
+                        .chars()
+                        .next()
+                        .is_some_and(|character| character.is_ascii_digit())
+                {
+                    return Err(invalid_route_path(path, "invalid route parameter name"));
+                }
                 parameter = false;
             }
-            _ => converted.push(character),
+            _ => {
+                if parameter {
+                    parameter_name.push(character);
+                }
+                converted.push(character);
+            }
         }
     }
 
     if parameter {
-        path.to_owned()
+        Err(invalid_route_path(path, "unclosed route parameter"))
     } else {
-        converted
+        Ok(converted)
+    }
+}
+
+fn validate_route_path(path: &str) -> Result<(), RuntimeError> {
+    if !path.starts_with('/') {
+        return Err(invalid_route_path(path, "route path must start with '/'"));
+    }
+
+    for segment in path.split('/') {
+        if !segment.contains('{') && !segment.contains('}') {
+            continue;
+        }
+        if !(segment.starts_with('{') && segment.ends_with('}')) {
+            return Err(invalid_route_path(
+                path,
+                "route parameters must be complete path segments",
+            ));
+        }
+        if !is_valid_route_parameter_name(&segment[1..segment.len() - 1]) {
+            return Err(invalid_route_path(path, "invalid route parameter name"));
+        }
+    }
+
+    Ok(())
+}
+
+fn is_valid_route_parameter_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+        && name
+            .chars()
+            .all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn invalid_route_path(path: &str, reason: impl Into<String>) -> RuntimeError {
+    RuntimeError::InvalidRoutePath {
+        path: path.to_owned(),
+        reason: reason.into(),
     }
 }
 
 fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
     if let Some(response) = route.native_response() {
         return static_json_router(route.method(), response.clone());
+    }
+    if route.python_handler() {
+        return python_bridge_router(route.method(), route.handler().to_owned());
     }
 
     match (route.method(), route.handler()) {
@@ -221,6 +521,38 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
         (Method::Patch, "update_echo") => patch(update_echo),
         (Method::Delete, "delete_echo") => delete(delete_echo),
         (method, _) => not_implemented_router(method),
+    }
+}
+
+fn python_bridge_router(method: Method, handler: String) -> MethodRouter<AppState> {
+    match method {
+        Method::Get => get({
+            let handler = handler.clone();
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
+        }),
+        Method::Post => post({
+            let handler = handler.clone();
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
+        }),
+        Method::Put => put({
+            let handler = handler.clone();
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
+        }),
+        Method::Patch => patch({
+            let handler = handler.clone();
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
+        }),
+        Method::Delete => delete({
+            let handler = handler.clone();
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
+        }),
+        Method::Options => options({
+            let handler = handler.clone();
+            move |deadline, state, body| call_python_bridge(handler.clone(), deadline, state, body)
+        }),
+        Method::Head => head(move |deadline, state, body| {
+            call_python_bridge(handler.clone(), deadline, state, body)
+        }),
     }
 }
 
@@ -268,7 +600,7 @@ fn static_json_router(method: Method, response: Value) -> MethodRouter<AppState>
                 async move { Json(response) }
             }
         }),
-        Method::Head => head(move || async move { StatusCode::NO_CONTENT }),
+        Method::Head => head(move || async move { StatusCode::OK }),
     }
 }
 
@@ -299,6 +631,12 @@ async fn not_implemented_head() -> StatusCode {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pool: Option<PgPool>,
+    python_bridge: Option<PythonBridge>,
+}
+
+#[allow(clippy::io_other_error)]
+fn io_other(message: &'static str) -> std::io::Error {
+    std::io::Error::new(ErrorKind::Other, message)
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -373,6 +711,28 @@ struct SettingRow {
 
 async fn ping() -> Json<Value> {
     Json(json!({ "ok": true }))
+}
+
+async fn call_python_bridge(
+    handler: String,
+    Extension(deadline): Extension<RequestDeadline>,
+    State(state): State<AppState>,
+    body: Bytes,
+) -> Result<impl IntoResponse, RuntimeRouteError> {
+    let bridge = state
+        .python_bridge
+        .as_ref()
+        .ok_or(RuntimeRouteError::PythonBridgeNotConfigured)?;
+    let body = if body.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&body).map_err(RuntimeRouteError::RequestJson)?
+    };
+    let response = bridge.call(handler, body, deadline.0).await?;
+    let status = StatusCode::from_u16(response.status)
+        .map_err(|error| RuntimeRouteError::PythonBridgeProtocol(error.to_string()))?;
+
+    Ok((status, Json(response.body)))
 }
 
 async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
@@ -539,6 +899,14 @@ impl AppState {
 enum RuntimeRouteError {
     DatabaseNotConfigured,
     Database(sqlx::Error),
+    PythonBridgeNotConfigured,
+    PythonBridgeIo(std::io::Error),
+    PythonBridgeSerialize(serde_json::Error),
+    PythonBridgeProtocol(String),
+    PythonBridgeClosed,
+    RequestTimeout,
+    PythonBridgeUnavailable,
+    RequestJson(serde_json::Error),
 }
 
 impl From<sqlx::Error> for RuntimeRouteError {
@@ -554,9 +922,47 @@ impl IntoResponse for RuntimeRouteError {
                 StatusCode::SERVICE_UNAVAILABLE,
                 "database is not configured for this runtime",
             ),
+            Self::PythonBridgeNotConfigured => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "python bridge is not configured for this runtime",
+            ),
             Self::Database(error) => {
                 eprintln!("silta runtime database query failed: {error}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "database query failed")
+            }
+            Self::PythonBridgeIo(error) => {
+                eprintln!("silta python bridge I/O failed: {error}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "python bridge I/O failed",
+                )
+            }
+            Self::PythonBridgeSerialize(error) => {
+                eprintln!("silta python bridge request serialization failed: {error}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "python bridge request serialization failed",
+                )
+            }
+            Self::PythonBridgeProtocol(error) => {
+                eprintln!("silta python bridge protocol failed: {error}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "python bridge protocol failed",
+                )
+            }
+            Self::RequestTimeout => (StatusCode::GATEWAY_TIMEOUT, "request deadline exceeded"),
+            Self::PythonBridgeUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "python worker queue is full or shutting down",
+            ),
+            Self::PythonBridgeClosed => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "python bridge process closed",
+            ),
+            Self::RequestJson(error) => {
+                eprintln!("silta request JSON parsing failed: {error}");
+                (StatusCode::BAD_REQUEST, "request body is not valid JSON")
             }
         };
 
@@ -564,14 +970,37 @@ impl IntoResponse for RuntimeRouteError {
     }
 }
 
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+async fn shutdown_signal() -> Result<(), std::io::Error> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut terminate = signal(SignalKind::terminate())?;
+        let mut hangup = signal(SignalKind::hangup())?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => result,
+            _ = terminate.recv() => Ok(()),
+            _ = hangup.recv() => Ok(()),
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c().await
 }
 
 #[cfg(test)]
 mod tests {
     use super::Runtime;
     use silta_core::{Application, Method, Route};
+
+    #[test]
+    fn request_timeout_range_is_validated() {
+        use std::time::Duration;
+        for millis in [0, 86400001, u64::MAX] {
+            assert!(super::validate_request_timeout(Duration::from_millis(millis)).is_err());
+        }
+        for millis in [1, 30000, 86400000] {
+            assert!(super::validate_request_timeout(Duration::from_millis(millis)).is_ok());
+        }
+    }
 
     #[test]
     fn runtime_prepares_route_table() {
@@ -589,9 +1018,19 @@ mod tests {
     #[test]
     fn axum_path_converts_python_parameters() {
         assert_eq!(
-            super::axum_path("/rates/{base}/{quote}"),
+            super::axum_path("/rates/{base}/{quote}").expect("valid path"),
             "/rates/:base/:quote"
         );
+    }
+
+    #[test]
+    fn axum_path_rejects_unclosed_parameter() {
+        assert!(super::axum_path("/rates/{base").is_err());
+    }
+
+    #[test]
+    fn axum_path_rejects_partial_segment_parameter() {
+        assert!(super::axum_path("/rates/base-{quote}").is_err());
     }
 
     #[test]
@@ -610,5 +1049,39 @@ mod tests {
             .route_table()
             .exact_match(Method::Get, "/hello")
             .is_some());
+    }
+    #[test]
+    fn validate_bridge_config_before_startup() {
+        let mut app = Application::new("hybrid");
+        app.add_route(Route::with_python_handler(Method::Get, "/", "h"));
+        let mut config = super::RuntimeConfig::default();
+        assert!(super::python_bridge_config(&app, &config).is_err());
+        config.python_bridge_executable = Some("python".into());
+        assert!(super::python_bridge_config(&app, &config).is_err());
+        config.python_bridge_target = Some(" ".into());
+        assert!(super::python_bridge_config(&app, &config).is_err());
+        config.python_bridge_target = Some("app:app".into());
+        assert_eq!(
+            super::python_bridge_config(&app, &config).unwrap(),
+            Some(("python", "app:app"))
+        );
+        let native = Application::new("native");
+        assert!(super::python_bridge_config(&native, &config)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn preparation_rejects_invalid_paths_and_future_plans() {
+        let mut app = Application::new("invalid path");
+        app.add_route(Route::with_python_handler(Method::Get, "/{unclosed", "h"));
+        assert!(Runtime::prepare(app).is_err());
+        let future: Application =
+            serde_json::from_value(serde_json::json!({"plan_version": 2, "name": "future"}))
+                .unwrap();
+        assert!(matches!(
+            Runtime::prepare(future),
+            Err(super::RuntimeError::ExecutionPlan(_))
+        ));
     }
 }

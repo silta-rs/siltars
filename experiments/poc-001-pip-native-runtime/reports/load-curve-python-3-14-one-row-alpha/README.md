@@ -46,6 +46,9 @@ claim.
 
 ## Charts
 
+Charts plot averaged points per concurrency level. Raw per-run points stay
+available in CSV and `oha` JSON files.
+
 ### One-Row Read
 
 ![Silta vs FastAPI GET /setting](GET-setting.svg)

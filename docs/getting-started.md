@@ -5,7 +5,7 @@ show the current Python-facing API shape.
 
 ## Requirements
 
-- Rust toolchain compatible with the workspace `rust-version`.
+- Rust 1.88 or newer (the workspace and locked dependencies require it).
 - Python 3.10 or newer.
 
 ## Verify Rust Crates
@@ -56,3 +56,6 @@ The `App` object records declarations that the runtime boundary can turn into
 an application representation. `response=...` marks a simple native JSON route
 for the current Pre-Alpha runtime. Silta does not yet expose `Model`, an ORM, or
 deployment commands.
+
+For runnable HTTP examples, request deadlines, worker recovery, and migration
+notes, continue with the [FastAPI/Django cookbook](cookbook.md).

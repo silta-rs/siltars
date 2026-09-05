@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import contextlib
 import importlib
 import importlib.util
+import inspect
 import json
 import os
 import signal
@@ -16,6 +19,13 @@ from pathlib import Path
 from typing import Any
 
 from silta import App
+from silta._json import validate_json
+
+
+class _ForwardedSignal(Exception):
+    def __init__(self, signum: int) -> None:
+        super().__init__(signum)
+        self.signum = signum
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -43,6 +53,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Application target, for example app:app or path/to/app.py:app.",
     )
     dev_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
+    dev_parser.add_argument("--request-timeout-ms", default=None,
+                             help="Request deadline in milliseconds (default: SILTA_REQUEST_TIMEOUT_MS or 30000).")
+    for flag, help_text in (
+        ("--metrics-listen", "Prometheus management address, e.g. 127.0.0.1:9464 (default: SILTA_METRICS_LISTEN)."),
+        ("--otlp-metrics-endpoint", "Full OTLP/HTTP protobuf metrics URL (default: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)."),
+        ("--service-name", "Telemetry service name (default: OTEL_SERVICE_NAME or app name)."),
+        ("--metrics-export-interval-ms", "Periodic metrics export interval (default: OTEL_METRIC_EXPORT_INTERVAL or 15000)."),
+        ("--metrics-export-timeout-ms", "Collector request timeout (default: OTEL_METRIC_EXPORT_TIMEOUT or 2000)."),
+    ):
+        dev_parser.add_argument(flag, default=None, help=help_text)
     dev_parser.add_argument("--port", default="8000", help="Port to bind.")
     dev_parser.add_argument(
         "--database-url",
@@ -70,6 +90,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Path to the silta-runtime binary. Defaults to SILTA_RUNTIME_BIN or packaged binary.",
     )
 
+    bridge_parser = subparsers.add_parser(
+        "_bridge",
+        help=argparse.SUPPRESS,
+    )
+    bridge_parser.add_argument("target")
+    bridge_parser.add_argument("--ready", action="store_true", help=argparse.SUPPRESS)
+
     args = parser.parse_args(argv)
 
     if args.command == "inspect":
@@ -85,7 +112,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             db_max_connections=args.db_max_connections,
             db_acquire_timeout_ms=args.db_acquire_timeout_ms,
             runtime_bin=args.runtime_bin,
+            request_timeout_ms=args.request_timeout_ms,
+            metrics_options={flag: getattr(args, flag.replace("-", "_")) for flag in (
+                "metrics-listen", "otlp-metrics-endpoint", "service-name",
+                "metrics-export-interval-ms", "metrics-export-timeout-ms",
+            )},
         )
+
+    if args.command == "_bridge":
+        # Isolate the protocol before importing any application/native library.
+        # FD 1 (including C stdio and inherited subprocess output) becomes a log
+        # stream; only this private, non-inheritable duplicate carries replies.
+        sys.stdout.flush()
+        protocol_fd = os.dup(1)
+        os.set_inheritable(protocol_fd, False)
+        try:
+            os.dup2(2, 1)
+            protocol = os.fdopen(protocol_fd, "w", encoding="utf-8", buffering=1)
+        except BaseException:
+            os.close(protocol_fd)
+            raise
+        with protocol:
+            return _bridge(args.target, protocol_output=protocol, announce_ready=args.ready)
 
     parser.error(f"unknown command: {args.command}")
     return 2
@@ -94,11 +142,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _inspect(target: str) -> int:
     try:
         app = _load_app(target)
+        description = app.describe()
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    print(json.dumps(app.describe(), indent=2, sort_keys=True))
+    print(json.dumps(description, indent=2, sort_keys=True, allow_nan=False))
     return 0
 
 
@@ -112,9 +161,12 @@ def _dev(
     db_max_connections: str | None,
     db_acquire_timeout_ms: str | None,
     runtime_bin: str | None,
+    request_timeout_ms: str | None = None,
+    metrics_options: dict[str, str | None] | None = None,
 ) -> int:
     try:
         app = _load_app(target)
+        description = app.describe()
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
@@ -131,7 +183,7 @@ def _dev(
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", prefix="silta-app-", suffix=".json", delete=False
     ) as definition:
-        json.dump(app.describe(), definition, sort_keys=True)
+        json.dump(description, definition, sort_keys=True, allow_nan=False)
         definition_path = definition.name
 
     command = [
@@ -142,7 +194,16 @@ def _dev(
         port,
         "--definition",
         definition_path,
+        "--python-bridge-executable",
+        sys.executable,
+        "--python-bridge-target",
+        target,
     ]
+    for flag, value in (metrics_options or {}).items():
+        if value is not None:
+            command.extend(["--" + flag, value])
+    if request_timeout_ms is not None:
+        command.extend(["--request-timeout-ms", request_timeout_ms])
     if database_url is not None:
         command.extend(["--database-url", database_url])
     if db_min_connections is not None:
@@ -155,15 +216,163 @@ def _dev(
     env = os.environ.copy()
     process = subprocess.Popen(command, env=env)
     try:
-        return process.wait()
-    except KeyboardInterrupt:
-        process.send_signal(signal.SIGINT)
-        return process.wait()
+        return _wait_for_child(process)
     finally:
         try:
             Path(definition_path).unlink()
         except FileNotFoundError:
             pass
+
+
+def _wait_for_child(process: subprocess.Popen[Any]) -> int:
+    signal_names = ["SIGINT", "SIGTERM", "SIGHUP"]
+    previous_handlers: dict[int, Any] = {}
+
+    def forward_signal(signum: int, _frame: Any) -> None:
+        if process.poll() is None:
+            process.send_signal(signum)
+        raise _ForwardedSignal(signum)
+
+    for signal_name in signal_names:
+        signum = getattr(signal, signal_name, None)
+        if signum is None:
+            continue
+        previous_handlers[signum] = signal.getsignal(signum)
+        signal.signal(signum, forward_signal)
+
+    try:
+        return process.wait()
+    except _ForwardedSignal:
+        return process.wait()
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
+
+
+def _bridge(target: str, *, protocol_output: Any = None, announce_ready: bool = False) -> int:
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            app = _load_app(target)
+        handlers: dict[str, Any] = {}
+        for route in app.routes:
+            if not route.python_handler:
+                continue
+            name = route.handler.__qualname__
+            if name in handlers and handlers[name] is not route.handler:
+                raise ValueError(f"ambiguous Python handler name: {name}")
+            handlers[name] = route.handler
+        if announce_ready:
+            print('{"ready":1}', file=protocol_output, flush=True)
+        with _AsyncRunner() as asyncio_runner:
+            for line in sys.stdin:
+                # A malformed protocol request must close the channel, so Rust
+                # observes EOF instead of waiting forever for a skipped reply.
+                response = _handle_bridge_line(line, handlers, asyncio_runner)
+                print(_encode_bridge_response(response), file=protocol_output, flush=True)
+        return 0
+    except Exception as error:
+        print(f"bridge error: {error}", file=sys.stderr)
+        return 1
+
+
+class _AsyncRunner:
+    """One event loop per worker, preserving async resources between requests."""
+
+    def __init__(self) -> None:
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def __enter__(self) -> _AsyncRunner:
+        return self
+
+    def __exit__(self, *_exc: Any) -> None:
+        if self._loop is None:
+            return
+        with contextlib.redirect_stdout(sys.stderr):
+            try:
+                pending = asyncio.all_tasks(self._loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    self._loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
+                self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+                self._loop.run_until_complete(self._loop.shutdown_default_executor())
+            finally:
+                self._loop.close()
+                self._loop = None
+
+    def run(self, value: Any) -> Any:
+        if not inspect.isawaitable(value):
+            return value
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
+
+        async def await_value() -> Any:
+            return await value
+
+        return self._loop.run_until_complete(await_value())
+
+
+def _handle_bridge_line(
+    line: str, handlers: dict[str, Any], asyncio_runner: _AsyncRunner
+) -> dict[str, Any]:
+    request = json.loads(line)
+    if not isinstance(request, dict):
+        raise ValueError("bridge request must be an object")
+    request_id = request.get("id")
+    handler_name = request.get("handler")
+    if type(request_id) is not int or not 0 <= request_id < 2**64:
+        raise ValueError("bridge id must be an unsigned 64-bit integer")
+    if not isinstance(handler_name, str) or not handler_name:
+        raise ValueError("bridge handler must be a nonempty string")
+    handler = handlers.get(handler_name)
+    if handler is None:
+        return {
+            "id": request_id,
+            "status": 500,
+            "body": {"error": f"python handler not found: {handler_name}"},
+        }
+
+    bridge_request = {
+        "body": request.get("body"),
+    }
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            signature = inspect.signature(handler)
+            result = handler(bridge_request) if signature.parameters else handler()
+            body = asyncio_runner.run(result)
+        return {
+            "id": request_id,
+            "status": 200,
+            "body": body,
+        }
+    except Exception as error:
+        return {
+            "id": request_id,
+            "status": 500,
+            "body": {"error": str(error)},
+        }
+
+
+def _encode_bridge_response(response: dict[str, Any]) -> str:
+    """Serialize one response without allowing application data to kill the worker."""
+
+    try:
+        validate_json(response)
+        encoded = json.dumps(response, separators=(",", ":"), allow_nan=False, ensure_ascii=False)
+        encoded.encode("utf-8")  # Reject unpaired surrogates before writing a reply.
+        return encoded
+    except (TypeError, ValueError, RecursionError, OverflowError) as error:
+        print(f"bridge response serialization failed: {type(error).__name__}", file=sys.stderr)
+        fallback = {
+            "id": response.get("id", 0),
+            "status": 500,
+            "body": {
+                "error": "python handler returned a value that cannot be serialized",
+            },
+        }
+        return json.dumps(fallback, separators=(",", ":"), allow_nan=False)
 
 
 def _find_runtime_binary(explicit: str | None) -> Path | None:

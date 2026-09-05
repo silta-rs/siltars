@@ -23,4 +23,19 @@ serde_json.workspace = true
 silta-core.workspace = true
 silta-router.workspace = true
 sqlx = { workspace = true, features = ["derive", "postgres", "runtime-tokio", "tls-native-tls"] }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+
+# One OpenTelemetry meter feeds both scrape and periodic OTLP export.
+opentelemetry = { version = "0.31", default-features = false, features = ["metrics"] }
+opentelemetry_sdk = { version = "0.31", default-features = false, features = ["metrics"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = ["metrics", "http-proto", "reqwest-blocking-client", "reqwest-rustls"] }
+opentelemetry-prometheus = "0.31"
+prometheus = { version = "0.14", default-features = false }
+
+# Bound and validate Collector replies while retaining the standard OTLP encoder.
+opentelemetry-http = { version = "0.31", default-features = false }
+opentelemetry-proto = { version = "0.31", default-features = false, features = ["gen-tonic-messages", "metrics"] }
+prost = "0.14"
+async-trait = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
