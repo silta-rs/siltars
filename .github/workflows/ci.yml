@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   rust:
@@ -21,6 +21,13 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test workspace
         run: cargo test --workspace
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test Rust-Python HTTP integration
+        run: |
+          cargo build -p silta-runtime
+          PYTHONPATH=python SILTA_RUNTIME_BIN="$PWD/target/debug/silta-runtime" python -m unittest discover -s python/tests -p 'test_runtime_integration.py'
 
   python:
     name: Python
@@ -32,6 +39,8 @@ jobs:
           python-version: "3.12"
       - name: Compile package
         run: python -m compileall python examples
+      - name: Test Python package
+        run: PYTHONPATH=python python -m unittest discover -s python/tests -p 'test_*.py'
       - name: Run hello-world example
         run: PYTHONPATH=python python examples/hello-world/app.py
       - name: Build Python distributions

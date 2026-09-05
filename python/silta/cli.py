@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import contextlib
 import importlib
 import importlib.util
@@ -211,12 +212,22 @@ def _wait_for_child(process: subprocess.Popen[Any]) -> int:
 
 def _bridge(target: str) -> int:
     try:
-        app = _load_app(target)
-        handlers = {route.handler.__qualname__: route.handler for route in app.routes}
-        asyncio_runner = _AsyncRunner()
-        for line in sys.stdin:
-            response = _handle_bridge_line(line, handlers, asyncio_runner)
-            print(json.dumps(response, separators=(",", ":")), flush=True)
+        with contextlib.redirect_stdout(sys.stderr):
+            app = _load_app(target)
+        handlers: dict[str, Any] = {}
+        for route in app.routes:
+            if not route.python_handler:
+                continue
+            name = route.handler.__qualname__
+            if name in handlers and handlers[name] is not route.handler:
+                raise ValueError(f"ambiguous Python handler name: {name}")
+            handlers[name] = route.handler
+        with _AsyncRunner() as asyncio_runner:
+            for line in sys.stdin:
+                # A malformed protocol request must close the channel, so Rust
+                # observes EOF instead of waiting forever for a skipped reply.
+                response = _handle_bridge_line(line, handlers, asyncio_runner)
+                print(_encode_bridge_response(response), flush=True)
         return 0
     except Exception as error:
         print(f"bridge error: {error}", file=sys.stderr)
@@ -224,20 +235,56 @@ def _bridge(target: str) -> int:
 
 
 class _AsyncRunner:
-    def run(self, value: Any) -> Any:
-        if inspect.isawaitable(value):
-            import asyncio
+    """One event loop per worker, preserving async resources between requests."""
 
-            return asyncio.run(value)
-        return value
+    def __init__(self) -> None:
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def __enter__(self) -> _AsyncRunner:
+        return self
+
+    def __exit__(self, *_exc: Any) -> None:
+        if self._loop is None:
+            return
+        with contextlib.redirect_stdout(sys.stderr):
+            try:
+                pending = asyncio.all_tasks(self._loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    self._loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
+                self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+                self._loop.run_until_complete(self._loop.shutdown_default_executor())
+            finally:
+                self._loop.close()
+                self._loop = None
+
+    def run(self, value: Any) -> Any:
+        if not inspect.isawaitable(value):
+            return value
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
+
+        async def await_value() -> Any:
+            return await value
+
+        return self._loop.run_until_complete(await_value())
 
 
 def _handle_bridge_line(
     line: str, handlers: dict[str, Any], asyncio_runner: _AsyncRunner
 ) -> dict[str, Any]:
     request = json.loads(line)
-    request_id = request["id"]
-    handler_name = request["handler"]
+    if not isinstance(request, dict):
+        raise ValueError("bridge request must be an object")
+    request_id = request.get("id")
+    handler_name = request.get("handler")
+    if type(request_id) is not int or not 0 <= request_id < 2**64:
+        raise ValueError("bridge id must be an unsigned 64-bit integer")
+    if not isinstance(handler_name, str) or not handler_name:
+        raise ValueError("bridge handler must be a nonempty string")
     handler = handlers.get(handler_name)
     if handler is None:
         return {
@@ -265,6 +312,44 @@ def _handle_bridge_line(
             "status": 500,
             "body": {"error": str(error)},
         }
+
+
+def _validate_bridge_json(value: Any) -> None:
+    # Match the finite JSON representation accepted by the Rust worker protocol.
+    # A depth limit also terminates cycles without a recursive Python traversal.
+    pending = [(value, 0)]
+    while pending:
+        item, depth = pending.pop()
+        if depth > 64:
+            raise ValueError("bridge JSON exceeds maximum depth of 64")
+        if isinstance(item, dict):
+            if any(not isinstance(key, str) for key in item):
+                raise TypeError("JSON object keys must be strings")
+            pending.extend((child, depth + 1) for child in item.values())
+        elif isinstance(item, (list, tuple)):
+            pending.extend((child, depth + 1) for child in item)
+        elif type(item) is int and not -(2**63) <= item < 2**64:
+            raise ValueError("integer exceeds the bridge JSON integer range")
+
+
+def _encode_bridge_response(response: dict[str, Any]) -> str:
+    """Serialize one response without allowing application data to kill the worker."""
+
+    try:
+        _validate_bridge_json(response)
+        encoded = json.dumps(response, separators=(",", ":"), allow_nan=False, ensure_ascii=False)
+        encoded.encode("utf-8")  # Reject unpaired surrogates before writing a reply.
+        return encoded
+    except (TypeError, ValueError, RecursionError, OverflowError) as error:
+        print(f"bridge response serialization failed: {type(error).__name__}", file=sys.stderr)
+        fallback = {
+            "id": response.get("id", 0),
+            "status": 500,
+            "body": {
+                "error": "python handler returned a value that cannot be serialized",
+            },
+        }
+        return json.dumps(fallback, separators=(",", ":"), allow_nan=False)
 
 
 def _find_runtime_binary(explicit: str | None) -> Path | None:
