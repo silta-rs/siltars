@@ -11,7 +11,9 @@ use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, sleep_until, Instant};
 
+use super::metrics::{GaugeGuard, Metrics, QueueGuard};
 use super::{io_other, RuntimeError, RuntimeRouteError};
+use opentelemetry::KeyValue;
 
 const QUEUE_CAPACITY: usize = 64;
 const MIN_BACKOFF: Duration = Duration::from_millis(100);
@@ -35,11 +37,13 @@ struct Call {
     body: Value,
     deadline: Instant,
     reply: oneshot::Sender<Reply>,
+    queue: QueueGuard,
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct PythonBridge {
     calls: mpsc::Sender<Call>,
+    metrics: Option<Metrics>,
     lifecycle: watch::Sender<Lifecycle>,
     supervisor: Arc<Mutex<Option<JoinHandle<std::io::Result<()>>>>>,
 }
@@ -68,8 +72,15 @@ struct Worker {
 }
 
 impl PythonBridge {
-    pub(super) async fn spawn(executable: &str, target: &str) -> Result<Self, RuntimeError> {
+    pub(super) async fn spawn(
+        executable: &str,
+        target: &str,
+        metrics: Option<Metrics>,
+    ) -> Result<Self, RuntimeError> {
         let worker = Worker::spawn(executable, target).map_err(RuntimeError::PythonBridge)?;
+        if let Some(metrics) = &metrics {
+            metrics.worker_starts.add(1, &[]);
+        }
         let (calls, receiver) = mpsc::channel(QUEUE_CAPACITY);
         let (lifecycle, changes) = watch::channel(Lifecycle::Running);
         let supervisor = tokio::spawn(supervise(
@@ -78,19 +89,27 @@ impl PythonBridge {
             worker,
             receiver,
             changes,
+            metrics.clone(),
         ));
         Ok(Self {
             calls,
+            metrics,
             lifecycle,
             supervisor: Arc::new(Mutex::new(Some(supervisor))),
         })
     }
 
     pub(super) fn begin_drain(&self) {
+        if let Some(metrics) = &self.metrics {
+            metrics.worker_ready.record(0, &[]);
+        }
         self.lifecycle.send_replace(Lifecycle::Draining);
     }
 
     pub(super) async fn shutdown(&self) -> Result<(), RuntimeError> {
+        if let Some(metrics) = &self.metrics {
+            metrics.worker_ready.record(0, &[]);
+        }
         self.lifecycle.send_replace(Lifecycle::Stopping);
         if let Some(task) = self.supervisor.lock().await.take() {
             task.await
@@ -102,17 +121,29 @@ impl PythonBridge {
 
     pub(super) async fn call(&self, handler: String, body: Value, deadline: Instant) -> Reply {
         if *self.lifecycle.borrow() != Lifecycle::Running {
+            if let Some(metrics) = &self.metrics {
+                metrics.rejected("shutdown");
+            }
             return Err(RuntimeRouteError::PythonBridgeUnavailable);
         }
         let (reply, receiver) = oneshot::channel();
-        self.calls
-            .try_send(Call {
-                handler,
-                body,
-                deadline,
-                reply,
-            })
-            .map_err(|_| RuntimeRouteError::PythonBridgeUnavailable)?;
+        let permit = self.calls.try_reserve().map_err(|error| {
+            if let Some(metrics) = &self.metrics {
+                metrics.rejected(if matches!(error, mpsc::error::TrySendError::Full(_)) {
+                    "queue_full"
+                } else {
+                    "shutdown"
+                });
+            }
+            RuntimeRouteError::PythonBridgeUnavailable
+        })?;
+        permit.send(Call {
+            handler,
+            body,
+            deadline,
+            reply,
+            queue: QueueGuard::new(self.metrics.as_ref()),
+        });
         // Dropping this receiver cancels queued work, or kills/reaps an active
         // worker. A partially written request can never contaminate its successor.
         receiver
@@ -127,7 +158,18 @@ async fn supervise(
     initial: Worker,
     mut calls: mpsc::Receiver<Call>,
     mut lifecycle: watch::Receiver<Lifecycle>,
+    metrics: Option<Metrics>,
 ) -> std::io::Result<()> {
+    // Reset readiness even on an unexpected supervisor error.
+    struct ReadinessGuard(Option<Metrics>);
+    impl Drop for ReadinessGuard {
+        fn drop(&mut self) {
+            if let Some(metrics) = &self.0 {
+                metrics.worker_ready.record(0, &[]);
+            }
+        }
+    }
+    let _readiness = ReadinessGuard(metrics.clone());
     let mut worker = Some(initial);
     let mut backoff = MIN_BACKOFF;
     loop {
@@ -150,8 +192,16 @@ async fn supervise(
             }
             backoff = (backoff * 2).min(MAX_BACKOFF);
             match Worker::spawn(&executable, &target) {
-                Ok(next) => worker = Some(next),
+                Ok(next) => {
+                    if let Some(metrics) = &metrics {
+                        metrics.worker_starts.add(1, &[]);
+                    }
+                    worker = Some(next);
+                }
                 Err(error) => {
+                    if let Some(metrics) = &metrics {
+                        metrics.worker_spawn_failures.add(1, &[]);
+                    }
                     eprintln!(
                         "silta-runtime: worker restart failed: {error}; retrying with backoff"
                     );
@@ -170,12 +220,22 @@ async fn supervise(
                 result = tokio::time::timeout(STARTUP_TIMEOUT, current.wait_ready()) => result,
             };
             if !matches!(ready, Ok(Ok(()))) {
+                if let Some(metrics) = &metrics {
+                    metrics.restart(if ready.is_err() {
+                        "startup_timeout"
+                    } else {
+                        "startup_error"
+                    });
+                }
                 eprintln!("silta-runtime: Python worker failed readiness; restarting");
                 current.reap(false).await?;
                 worker = None;
                 continue;
             }
             current.ready = true;
+            if let Some(metrics) = &metrics {
+                metrics.worker_ready.record(1, &[]);
+            }
         }
         let call = tokio::select! {
             biased;
@@ -185,6 +245,7 @@ async fn supervise(
             },
             status = current.child.wait() => {
                 status?; // Reap idle crashes too, without waiting for HTTP traffic.
+                if let Some(metrics) = &metrics { metrics.restart("idle_exit"); }
                 eprintln!("silta-runtime: idle Python worker exited; restarting");
                 worker = None;
                 continue;
@@ -196,14 +257,28 @@ async fn supervise(
             body,
             deadline,
             mut reply,
+            queue,
         } = call;
+        drop(queue);
         if reply.is_closed() {
+            if let Some(metrics) = &metrics {
+                metrics.rejected(if Instant::now() >= deadline {
+                    "queue_timeout"
+                } else {
+                    "queue_cancelled"
+                });
+            }
             continue;
         }
         if Instant::now() >= deadline {
+            if let Some(metrics) = &metrics {
+                metrics.rejected("queue_timeout");
+            }
             let _ = reply.send(Err(RuntimeRouteError::RequestTimeout));
             continue;
         }
+        let busy = GaugeGuard::new(metrics.as_ref().map(|metrics| &metrics.worker_busy));
+        let execution_start = Instant::now();
         let result = {
             let exchange = current.exchange(handler, body);
             tokio::pin!(exchange);
@@ -222,6 +297,27 @@ async fn supervise(
                 }
             }
         };
+        drop(busy);
+        let outcome = match &result {
+            Ok(response) if response.status >= 400 => "handler_error",
+            Ok(_) => "success",
+            Err(RuntimeRouteError::RequestTimeout) if Instant::now() < deadline => "cancelled",
+            Err(RuntimeRouteError::RequestTimeout) => "timeout",
+            Err(RuntimeRouteError::PythonBridgeClosed) => "eof",
+            Err(RuntimeRouteError::PythonBridgeProtocol(_)) => "protocol_error",
+            Err(RuntimeRouteError::PythonBridgeUnavailable) => "shutdown",
+            Err(_) => "io_error",
+        };
+        if let Some(metrics) = &metrics {
+            let attributes = [KeyValue::new("outcome", outcome)];
+            metrics
+                .worker_duration
+                .record(execution_start.elapsed().as_secs_f64(), &attributes);
+            metrics.worker_calls.add(1, &attributes);
+            if result.is_err() && outcome != "shutdown" {
+                metrics.restart(outcome);
+            }
+        }
         if result.is_err() {
             // No replay: application side effects may already have happened.
             // EOF uses wait first. All other failures invalidate the entire stream.

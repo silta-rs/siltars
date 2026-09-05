@@ -27,6 +27,10 @@ numbers are engineering evidence, not production claims.
 - A configurable request deadline covers body extraction and native/Python
   execution; integration tests exercise recovery and signal-driven shutdown.
 
+- Native HTTP/worker metrics export through Prometheus and cumulative OTLP/HTTP
+  protobuf, with Collector timeouts, partial-rejection accounting, and an
+  independent management listener. See [metrics](metrics.md).
+
 ## What Is Not Proven
 
 - The Rust -> Python -> Rust business-logic escape hatch is not production

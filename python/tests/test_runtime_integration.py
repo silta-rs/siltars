@@ -132,6 +132,8 @@ class RuntimeServerTestCase(unittest.TestCase):
     timeout_ms = 30000
     app_source = APP
     ready_path = "/native"
+    runtime_args = ()
+    runtime_env = None
 
     @classmethod
     def setUpClass(cls):
@@ -149,7 +151,7 @@ class RuntimeServerTestCase(unittest.TestCase):
             sys.executable, "-m", "silta.cli", "dev", str(app_path) + ":app",
             "--port", str(cls.port), "--runtime-bin", os.environ["SILTA_RUNTIME_BIN"],
             "--request-timeout-ms", str(cls.timeout_ms),
-        ], stdout=cls.log, stderr=cls.log)
+        ] + list(cls.runtime_args), stdout=cls.log, stderr=cls.log, env=cls.runtime_env)
         cls.addClassCleanup(cls.stop_server)
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
