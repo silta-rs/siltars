@@ -605,6 +605,11 @@ struct RateRow {
     source: String,
 }
 
+#[derive(Debug, Serialize)]
+struct RatesResponse {
+    rates: Vec<RateRow>,
+}
+
 #[derive(Debug, sqlx::FromRow)]
 struct BulkRateRow {
     id: i64,
@@ -690,7 +695,9 @@ async fn call_python_bridge(
     Ok((status, Json(response.body)))
 }
 
-async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
+async fn list_rates(
+    State(state): State<AppState>,
+) -> Result<Json<RatesResponse>, RuntimeRouteError> {
     let pool = state.pool()?;
     let rows = sqlx::query_as::<_, RateRow>(
         r#"
@@ -703,10 +710,12 @@ async fn list_rates(State(state): State<AppState>) -> Result<Json<Value>, Runtim
     .fetch_all(pool)
     .await?;
 
-    Ok(Json(json!({ "rates": rows })))
+    Ok(Json(RatesResponse { rates: rows }))
 }
 
-async fn list_rates_bulk(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
+async fn list_rates_bulk(
+    State(state): State<AppState>,
+) -> Result<Json<BulkRatesResponse>, RuntimeRouteError> {
     let pool = state.pool()?;
     let rows = sqlx::query_as::<_, BulkRateRow>(
         r#"
@@ -754,10 +763,10 @@ async fn list_rates_bulk(State(state): State<AppState>) -> Result<Json<Value>, R
         })
         .collect::<Vec<_>>();
 
-    Ok(Json(json!(BulkRatesResponse {
+    Ok(Json(BulkRatesResponse {
         count: rates.len(),
         rates,
-    })))
+    }))
 }
 
 async fn get_rate(
@@ -785,7 +794,7 @@ async fn get_rate(
     }))
 }
 
-async fn get_setting(State(state): State<AppState>) -> Result<Json<Value>, RuntimeRouteError> {
+async fn get_setting(State(state): State<AppState>) -> Result<Json<SettingRow>, RuntimeRouteError> {
     let pool = state.pool()?;
     let row = sqlx::query_as::<_, SettingRow>(
         r#"
@@ -797,13 +806,13 @@ async fn get_setting(State(state): State<AppState>) -> Result<Json<Value>, Runti
     .fetch_one(pool)
     .await?;
 
-    Ok(Json(json!(row)))
+    Ok(Json(row))
 }
 
 async fn patch_setting(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
-) -> Result<Json<Value>, RuntimeRouteError> {
+) -> Result<Json<SettingRow>, RuntimeRouteError> {
     let pool = state.pool()?;
     let value = payload
         .get("value")
@@ -823,7 +832,7 @@ async fn patch_setting(
     .fetch_one(pool)
     .await?;
 
-    Ok(Json(json!(row)))
+    Ok(Json(row))
 }
 
 async fn create_echo(Json(payload): Json<Value>) -> Json<Value> {
