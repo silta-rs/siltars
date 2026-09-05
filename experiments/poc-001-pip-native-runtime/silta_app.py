@@ -7,7 +7,7 @@ from silta import App
 app = App()
 
 
-@app.get("/ping")
+@app.get("/ping", python=False)
 def ping():
     return {"ok": True}
 
@@ -17,22 +17,22 @@ def list_users():
     return {"users": []}
 
 
-@app.get("/rates")
+@app.get("/rates", python=False)
 def list_rates():
     return {"rates": []}
 
 
-@app.get("/rates/bulk")
+@app.get("/rates/bulk", python=False)
 def list_rates_bulk():
     return {"count": 0, "rates": []}
 
 
-@app.get("/rates/{base}/{quote}")
+@app.get("/rates/{base}/{quote}", python=False)
 def get_rate():
     return {"base": "EUR", "quote": "USD", "rate": "1.0"}
 
 
-@app.get("/setting")
+@app.get("/setting", python=False)
 def get_setting():
     return {"id": 1, "name": "alpha", "value": "enabled"}
 
@@ -59,12 +59,12 @@ def bridge_prints():
     return {"printed": True}
 
 
-@app.post("/echo")
+@app.post("/echo", python=False)
 def create_echo():
     return {"method": "POST", "payload": {}}
 
 
-@app.patch("/setting")
+@app.patch("/setting", python=False)
 def patch_setting():
     return {"id": 1, "name": "alpha", "value": "patched"}
 

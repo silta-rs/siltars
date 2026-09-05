@@ -8,9 +8,11 @@ definition, prepare route metadata into a route table, and start a native Axum
 HTTP server for supported prototype routes. It does not yet provide a production
 Python execution bridge, stable validation layer, stable error contract, or ORM.
 
-The current prototype maps a small set of database benchmark routes to native
-Rust handlers by symbolic Python handler name, such as `list_rates` and
-`get_rate`. That is a temporary Pre-Alpha contract. The intended design is an
+The runtime now consumes a versioned
+[Execution Plan](execution-plan.md) with an explicit per-route mode, operation,
+and selection reason. The current prototype still maps a small set of database
+benchmark routes to native Rust handlers by symbolic Python handler name, such
+as `list_rates` and `get_rate`. That is a temporary Pre-Alpha contract. The intended design is an
 explicit application definition with route operations, query plans, validation
 rules, and Python escape hatches represented directly instead of inferred from
 function names.

@@ -1,17 +1,54 @@
 """Public Python API for Silta.
 
-The bootstrap package provides a minimal application description DSL. It does
-not start a server, connect to Rust, or implement persistence yet.
+The package records route declarations and emits a versioned execution plan
+for the Rust runtime. Arbitrary Python code is not compiled into Rust.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
+from ._json import validate_json
 from typing import Any, Callable, Literal, TypeAlias, TypeVar
 
 Handler: TypeAlias = Callable[..., Any]
 Method: TypeAlias = Literal["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
 HandlerT = TypeVar("HandlerT", bound=Handler)
+EXECUTION_PLAN_VERSION = 1
+
+
+class ExecutionMode(str, Enum):
+    """Where a prepared route executes at request time."""
+
+    NATIVE = "native"
+    HYBRID = "hybrid"
+    PYTHON_FALLBACK = "python_fallback"
+
+
+class OperationKind(str, Enum):
+    """The operation currently attached to a route execution plan."""
+
+    STATIC_RESPONSE = "static_response"
+    PYTHON_HANDLER = "python_handler"
+    LEGACY_SYMBOLIC = "legacy_symbolic"
+
+
+@dataclass(frozen=True, slots=True)
+class RouteExecution:
+    """A versioned runtime decision produced from a Python route declaration."""
+
+    mode: ExecutionMode
+    operation: OperationKind
+    reason: str
+
+    def describe(self) -> dict[str, str]:
+        """Return the serializable route execution contract."""
+
+        return {
+            "mode": self.mode.value,
+            "operation": self.operation.value,
+            "reason": self.reason,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +60,24 @@ class Route:
     handler: Handler
     native_response: Any | None = None
     python_handler: bool = False
+    execution: RouteExecution | None = None
+
+    def __post_init__(self) -> None:
+        if self.native_response is not None:
+            validate_json(self.native_response)
+        # Direct Route construction retains the original Pre-Alpha signature.
+        execution = self.execution
+        if execution is None:
+            execution = App._select_execution(
+                native_response=self.native_response, python=self.python_handler
+            )
+            object.__setattr__(self, "execution", execution)
+        if execution.mode is ExecutionMode.PYTHON_FALLBACK:
+            raise ValueError("python_fallback is not implemented")
+        if self.python_handler != (execution.mode is ExecutionMode.HYBRID):
+            raise ValueError("python_handler conflicts with execution mode")
+        if self.python_handler and self.native_response is not None:
+            raise ValueError("python routes cannot also define a native response")
 
 
 class App:
@@ -49,14 +104,20 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register a handler function as application metadata."""
 
         self._validate_path(path)
-        if python and (response is not None or native_response is not None):
+        if python is True and (response is not None or native_response is not None):
             raise ValueError("python routes cannot also define a native response")
+        if method not in {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}:
+            raise ValueError(f"unsupported HTTP method: {method}")
+        if python is not None and type(python) is not bool:
+            raise TypeError("python must be True, False, or None")
         route_response = native_response if native_response is not None else response
+        if route_response is not None:
+            validate_json(route_response)
 
         def decorator(handler: HandlerT) -> HandlerT:
             self._routes.append(
@@ -65,7 +126,11 @@ class App:
                     path=path,
                     handler=handler,
                     native_response=route_response,
-                    python_handler=python,
+                    python_handler=route_response is None and python is not False,
+                    execution=self._select_execution(
+                        native_response=route_response,
+                        python=python,
+                    ),
                 )
             )
             return handler
@@ -78,7 +143,7 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register a GET route."""
 
@@ -96,7 +161,7 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register a POST route."""
 
@@ -114,7 +179,7 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register a PUT route."""
 
@@ -132,7 +197,7 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register a PATCH route."""
 
@@ -150,7 +215,7 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register a DELETE route."""
 
@@ -168,7 +233,7 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register an OPTIONS route."""
 
@@ -186,7 +251,7 @@ class App:
         *,
         response: Any | None = None,
         native_response: Any | None = None,
-        python: bool = False,
+        python: bool | None = None,
     ) -> Callable[[HandlerT], HandlerT]:
         """Register a HEAD route."""
 
@@ -201,24 +266,58 @@ class App:
     def describe(self) -> dict[str, Any]:
         """Return a serializable description of the current application."""
 
-        return {
+        description = {
+            "plan_version": EXECUTION_PLAN_VERSION,
             "name": self.name,
             "routes": [self._describe_route(route) for route in self._routes],
         }
+        # Route payloads may have been mutated after registration.
+        validate_json(description)
+        return description
 
     @staticmethod
     def _describe_route(route: Route) -> dict[str, Any]:
+        assert route.execution is not None
         description: dict[str, Any] = {
             "method": route.method,
             "path": route.path,
             "handler": route.handler.__qualname__,
+            "execution": route.execution.describe(),
         }
 
         if route.native_response is not None:
             description["native_response"] = route.native_response
         if route.python_handler:
+            # Kept during the protocol transition so the ExecutionPlan remains
+            # safe to consume with the Pre-Alpha runtime from older releases.
             description["python_handler"] = True
         return description
+
+    @staticmethod
+    def _select_execution(
+        *, native_response: Any | None, python: bool | None
+    ) -> RouteExecution:
+        if native_response is not None:
+            return RouteExecution(
+                mode=ExecutionMode.NATIVE,
+                operation=OperationKind.STATIC_RESPONSE,
+                reason="static_response",
+            )
+        if python is False:
+            return RouteExecution(
+                mode=ExecutionMode.NATIVE,
+                operation=OperationKind.LEGACY_SYMBOLIC,
+                reason="explicit_legacy_native_handler",
+            )
+        return RouteExecution(
+            mode=ExecutionMode.HYBRID,
+            operation=OperationKind.PYTHON_HANDLER,
+            reason=(
+                "explicit_python_handler"
+                if python is True
+                else "automatic_python_handler"
+            ),
+        )
 
     @staticmethod
     def _validate_path(path: str) -> None:
@@ -248,4 +347,11 @@ class App:
                 raise ValueError("route parameter names must be valid identifiers")
 
 
-__all__ = ["App", "Route"]
+__all__ = [
+    "App",
+    "EXECUTION_PLAN_VERSION",
+    "ExecutionMode",
+    "OperationKind",
+    "Route",
+    "RouteExecution",
+]

@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::future::IntoFuture;
 use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::Stdio;
@@ -21,18 +22,20 @@ use axum::routing::{delete, get, head, options, patch, post, put, MethodRouter};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use silta_core::{Application, Method, Route};
+use silta_core::{Application, ExecutionPlanError, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Connection, PgConnection, PgPool};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 
 /// Errors returned while preparing the runtime.
 #[derive(Debug)]
 pub enum RuntimeError {
+    /// The Python-produced execution plan is unsupported or contradictory.
+    ExecutionPlan(ExecutionPlanError),
     /// Route metadata could not be converted into a route table.
     RouteTable(RouteTableError),
     /// The runtime could not bind its HTTP listener.
@@ -47,11 +50,14 @@ pub enum RuntimeError {
     InvalidRoutePath { path: String, reason: String },
     /// The Python bridge process could not be started.
     PythonBridge(std::io::Error),
+    /// Python bridge configuration does not satisfy the prepared plan.
+    InvalidPythonBridgeConfig(String),
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ExecutionPlan(error) => write!(f, "execution plan error: {error}"),
             Self::RouteTable(error) => write!(f, "route table error: {error}"),
             Self::Bind(error) => write!(f, "bind error: {error}"),
             Self::Server(error) => write!(f, "server error: {error}"),
@@ -63,6 +69,9 @@ impl fmt::Display for RuntimeError {
                 write!(f, "invalid route path {path:?}: {reason}")
             }
             Self::PythonBridge(error) => write!(f, "python bridge error: {error}"),
+            Self::InvalidPythonBridgeConfig(reason) => {
+                write!(f, "invalid python bridge configuration: {reason}")
+            }
         }
     }
 }
@@ -70,6 +79,7 @@ impl fmt::Display for RuntimeError {
 impl Error for RuntimeError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::ExecutionPlan(error) => Some(error),
             Self::RouteTable(error) => Some(error),
             Self::Bind(error) => Some(error),
             Self::Server(error) => Some(error),
@@ -77,6 +87,7 @@ impl Error for RuntimeError {
             Self::DatabaseConnectionRefused(error) => Some(error),
             Self::InvalidRoutePath { .. } => None,
             Self::PythonBridge(error) => Some(error),
+            Self::InvalidPythonBridgeConfig(_) => None,
         }
     }
 }
@@ -84,6 +95,12 @@ impl Error for RuntimeError {
 impl From<RouteTableError> for RuntimeError {
     fn from(error: RouteTableError) -> Self {
         Self::RouteTable(error)
+    }
+}
+
+impl From<ExecutionPlanError> for RuntimeError {
+    fn from(error: ExecutionPlanError) -> Self {
+        Self::ExecutionPlan(error)
     }
 }
 
@@ -139,6 +156,10 @@ pub struct Runtime {
 impl Runtime {
     /// Prepares runtime state from an application description.
     pub fn prepare(application: Application) -> Result<Self, RuntimeError> {
+        application.validate()?;
+        for route in application.routes() {
+            axum_path(route.path())?;
+        }
         let route_table = RouteTable::from_routes(application.routes().iter().cloned())?;
 
         Ok(Self {
@@ -159,24 +180,21 @@ impl Runtime {
 
     /// Starts the native HTTP runtime.
     pub async fn serve(self, config: RuntimeConfig) -> Result<(), RuntimeError> {
+        // Validate the complete configuration before opening a DB connection
+        // or starting a worker.
+        let bridge_config = python_bridge_config(&self.application, &config)?;
         let pool = match config.database_url.as_deref() {
             Some(database_url) => Some(create_pool(database_url, &config).await?),
             None => None,
         };
-
-        let python_bridge = match (
-            config.python_bridge_executable.as_deref(),
-            config.python_bridge_target.as_deref(),
-        ) {
-            (Some(executable), Some(target)) => {
-                Some(PythonBridge::spawn(executable, target).await?)
-            }
-            _ => None,
+        let python_bridge = match bridge_config {
+            Some((executable, target)) => Some(PythonBridge::spawn(executable, target).await?),
+            None => None,
         };
 
         let state = AppState {
             pool,
-            python_bridge,
+            python_bridge: python_bridge.clone(),
         };
         let app = native_router(&self.application, state)?;
         let address = SocketAddr::new(config.host, config.port);
@@ -184,15 +202,42 @@ impl Runtime {
             .await
             .map_err(RuntimeError::Bind)?;
 
-        axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
-            .await
-            .map_err(RuntimeError::Server)
+        let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        let server = axum::serve(listener, app)
+            .with_graceful_shutdown(async {
+                let _ = stop_rx.await;
+            })
+            .into_future();
+        tokio::pin!(server);
+        let result = tokio::select! {
+            result = &mut server => result,
+            signal = shutdown_signal() => {
+                let _ = stop_tx.send(());
+                match signal {
+                    Err(error) => Err(error),
+                    Ok(()) => match tokio::time::timeout(Duration::from_secs(5), &mut server).await {
+                        Ok(result) => result,
+                        Err(_) => {
+                            eprintln!("silta-runtime: shutdown grace period expired; stopping Python worker");
+                            Ok(())
+                        }
+                    },
+                }
+            }
+        };
+        // Child ownership is independent of the request I/O lock: an active
+        // handler cannot prevent kill + wait/reap after the grace period.
+        if let Some(bridge) = python_bridge {
+            bridge.shutdown().await?;
+        }
+        result.map_err(RuntimeError::Server)
     }
 }
 
 /// Builds the bootstrap native HTTP router from an application description.
 pub fn native_router(application: &Application, state: AppState) -> Result<Router, RuntimeError> {
+    application.validate()?;
+    RouteTable::from_routes(application.routes().iter().cloned())?;
     let mut routes: BTreeMap<String, MethodRouter<AppState>> = BTreeMap::new();
 
     for route in application.routes() {
@@ -213,6 +258,28 @@ pub fn native_router(application: &Application, state: AppState) -> Result<Route
     }
 
     Ok(router.with_state(state))
+}
+
+fn python_bridge_config<'a>(
+    application: &Application,
+    config: &'a RuntimeConfig,
+) -> Result<Option<(&'a str, &'a str)>, RuntimeError> {
+    let requires_python = application.routes().iter().any(Route::python_handler);
+    match (
+        config.python_bridge_executable.as_deref(),
+        config.python_bridge_target.as_deref(),
+    ) {
+        (Some(executable), Some(target))
+            if !executable.trim().is_empty() && !target.trim().is_empty() =>
+        {
+            Ok(requires_python.then_some((executable, target)))
+        }
+        (None, None) if !requires_python => Ok(None),
+        _ => Err(RuntimeError::InvalidPythonBridgeConfig(
+            "Python routes require a nonempty executable and target; configure both or neither"
+                .to_owned(),
+        )),
+    }
 }
 
 async fn create_pool(database_url: &str, config: &RuntimeConfig) -> Result<PgPool, RuntimeError> {
@@ -478,11 +545,11 @@ pub struct AppState {
 #[derive(Debug, Clone)]
 struct PythonBridge {
     process: Arc<Mutex<PythonBridgeProcess>>,
+    child: Arc<Mutex<Child>>,
 }
 
 #[derive(Debug)]
 struct PythonBridgeProcess {
-    child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: u64,
@@ -523,13 +590,26 @@ impl PythonBridge {
             .ok_or_else(|| RuntimeError::PythonBridge(io_other("missing stdout")))?;
 
         Ok(Self {
+            child: Arc::new(Mutex::new(child)),
             process: Arc::new(Mutex::new(PythonBridgeProcess {
-                child,
                 stdin,
                 stdout: BufReader::new(stdout),
                 next_id: 1,
             })),
         })
+    }
+
+    async fn shutdown(&self) -> Result<(), RuntimeError> {
+        let mut child = self.child.lock().await;
+        if child
+            .try_wait()
+            .map_err(RuntimeError::PythonBridge)?
+            .is_none()
+        {
+            // Tokio's kill also waits for the child, preventing zombie processes.
+            child.kill().await.map_err(RuntimeError::PythonBridge)?;
+        }
+        Ok(())
     }
 
     async fn call(
@@ -564,7 +644,6 @@ impl PythonBridge {
                 .await
                 .map_err(RuntimeRouteError::PythonBridgeIo)?;
             if bytes_read == 0 {
-                let _ = process.child.wait().await;
                 return Err(RuntimeRouteError::PythonBridgeClosed);
             }
 
@@ -916,8 +995,20 @@ impl IntoResponse for RuntimeRouteError {
     }
 }
 
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+async fn shutdown_signal() -> Result<(), std::io::Error> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut terminate = signal(SignalKind::terminate())?;
+        let mut hangup = signal(SignalKind::hangup())?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => result,
+            _ = terminate.recv() => Ok(()),
+            _ = hangup.recv() => Ok(()),
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c().await
 }
 
 #[cfg(test)]
@@ -972,5 +1063,39 @@ mod tests {
             .route_table()
             .exact_match(Method::Get, "/hello")
             .is_some());
+    }
+    #[test]
+    fn validate_bridge_config_before_startup() {
+        let mut app = Application::new("hybrid");
+        app.add_route(Route::with_python_handler(Method::Get, "/", "h"));
+        let mut config = super::RuntimeConfig::default();
+        assert!(super::python_bridge_config(&app, &config).is_err());
+        config.python_bridge_executable = Some("python".into());
+        assert!(super::python_bridge_config(&app, &config).is_err());
+        config.python_bridge_target = Some(" ".into());
+        assert!(super::python_bridge_config(&app, &config).is_err());
+        config.python_bridge_target = Some("app:app".into());
+        assert_eq!(
+            super::python_bridge_config(&app, &config).unwrap(),
+            Some(("python", "app:app"))
+        );
+        let native = Application::new("native");
+        assert!(super::python_bridge_config(&native, &config)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn preparation_rejects_invalid_paths_and_future_plans() {
+        let mut app = Application::new("invalid path");
+        app.add_route(Route::with_python_handler(Method::Get, "/{unclosed", "h"));
+        assert!(Runtime::prepare(app).is_err());
+        let future: Application =
+            serde_json::from_value(serde_json::json!({"plan_version": 2, "name": "future"}))
+                .unwrap();
+        assert!(matches!(
+            Runtime::prepare(future),
+            Err(super::RuntimeError::ExecutionPlan(_))
+        ));
     }
 }
