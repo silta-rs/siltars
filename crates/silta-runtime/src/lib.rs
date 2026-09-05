@@ -31,7 +31,10 @@ use tokio::sync::oneshot;
 use tokio::time::Instant;
 
 mod bridge;
+mod metrics;
 use bridge::PythonBridge;
+pub use metrics::MetricsConfig;
+use metrics::{HttpMetrics, Telemetry};
 
 /// Errors returned while preparing the runtime.
 #[derive(Debug)]
@@ -56,6 +59,8 @@ pub enum RuntimeError {
     InvalidPythonBridgeConfig(String),
     /// Request timeout is outside the supported range.
     InvalidRequestTimeout,
+    /// Invalid metrics configuration or exporter initialization.
+    Metrics(String),
 }
 
 impl fmt::Display for RuntimeError {
@@ -73,6 +78,7 @@ impl fmt::Display for RuntimeError {
                 write!(f, "invalid route path {path:?}: {reason}")
             }
             Self::PythonBridge(error) => write!(f, "python bridge error: {error}"),
+            Self::Metrics(message) => write!(f, "metrics error: {message}"),
             Self::InvalidRequestTimeout => {
                 write!(f, "request timeout must be between 1 ms and 24 hours")
             }
@@ -94,7 +100,9 @@ impl Error for RuntimeError {
             Self::DatabaseConnectionRefused(error) => Some(error),
             Self::InvalidRoutePath { .. } => None,
             Self::PythonBridge(error) => Some(error),
-            Self::InvalidPythonBridgeConfig(_) | Self::InvalidRequestTimeout => None,
+            Self::InvalidPythonBridgeConfig(_) | Self::InvalidRequestTimeout | Self::Metrics(_) => {
+                None
+            }
         }
     }
 }
@@ -126,6 +134,8 @@ pub struct RuntimeConfig {
     pub port: u16,
     /// Deadline from receipt of HTTP headers through response creation.
     pub request_timeout: Duration,
+    /// Optional native Prometheus and OTLP metric exporters.
+    pub metrics: MetricsConfig,
     /// PostgreSQL connection URL used by native database routes.
     pub database_url: Option<String>,
     /// Minimum database connections kept by the native pool.
@@ -146,6 +156,7 @@ impl Default for RuntimeConfig {
             host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             port: 8000,
             request_timeout: Duration::from_secs(30),
+            metrics: MetricsConfig::default(),
             database_url: None,
             db_min_connections: 1,
             db_max_connections: 10,
@@ -193,6 +204,7 @@ impl Runtime {
         // Validate the complete configuration before opening a DB connection
         // or starting a worker.
         validate_request_timeout(config.request_timeout)?;
+        config.metrics.validate()?;
         let bridge_config = python_bridge_config(&self.application, &config)?;
         let pool = match config.database_url.as_deref() {
             Some(database_url) => Some(create_pool(database_url, &config).await?),
@@ -202,8 +214,29 @@ impl Runtime {
         let listener = TcpListener::bind(address)
             .await
             .map_err(RuntimeError::Bind)?;
+        let telemetry = Telemetry::start(&config.metrics, self.application.name()).await?;
+        let http_metrics = match telemetry
+            .metrics
+            .clone()
+            .map(|metrics| HttpMetrics::new(metrics, &self.application))
+            .transpose()
+        {
+            Ok(metrics) => metrics,
+            Err(error) => {
+                telemetry.shutdown().await;
+                return Err(error);
+            }
+        };
         let python_bridge = match bridge_config {
-            Some((executable, target)) => Some(PythonBridge::spawn(executable, target).await?),
+            Some((executable, target)) => {
+                match PythonBridge::spawn(executable, target, telemetry.metrics.clone()).await {
+                    Ok(bridge) => Some(bridge),
+                    Err(error) => {
+                        telemetry.shutdown().await;
+                        return Err(error);
+                    }
+                }
+            }
             None => None,
         };
 
@@ -217,13 +250,21 @@ impl Runtime {
                 request_deadline,
             )),
             Err(error) => {
-                if let Some(bridge) = python_bridge {
-                    bridge.shutdown().await?;
-                }
+                let cleanup = if let Some(bridge) = python_bridge {
+                    bridge.shutdown().await
+                } else {
+                    Ok(())
+                };
+                telemetry.shutdown().await;
+                cleanup?;
                 return Err(error);
             }
         };
 
+        let app = match http_metrics {
+            Some(metrics) => app.layer(middleware::from_fn_with_state(metrics, metrics::observe)),
+            None => app,
+        };
         let (stop_tx, stop_rx) = oneshot::channel::<()>();
         let server = axum::serve(listener, app)
             .with_graceful_shutdown(async {
@@ -249,9 +290,13 @@ impl Runtime {
             }
         };
         // The supervisor owns the child and reaps it before shutdown completes.
-        if let Some(bridge) = python_bridge {
-            bridge.shutdown().await?;
-        }
+        let cleanup = if let Some(bridge) = python_bridge {
+            bridge.shutdown().await
+        } else {
+            Ok(())
+        };
+        telemetry.shutdown().await;
+        cleanup?;
         result.map_err(RuntimeError::Server)
     }
 }

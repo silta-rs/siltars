@@ -1,9 +1,8 @@
 # Silta Cookbook for FastAPI and Django Developers
 
 This book follows everyday tasks: start a service, receive JSON, call Python,
-set a deadline, recover from failure, and test the result. Recipes 1–9 use the
-current repository. Recipe 10 describes the observability design to implement
-next; recipe 11 lists migration gaps. Silta remains Pre-Alpha.
+set a deadline, recover from failure, and test the result. Recipes 1–10 use the
+current repository; recipe 11 lists migration gaps. Silta remains Pre-Alpha.
 
 The complete runnable application is [examples/cookbook/app.py](../examples/cookbook/app.py).
 The crash and slow routes are local test tools; do not expose them in a deployed
@@ -232,42 +231,38 @@ in unit tests. Use HTTP tests to verify extraction, response codes, and process
 lifecycle. See [test_runtime_integration.py](../python/tests/test_runtime_integration.py)
 for the server fixture and cleanup pattern.
 
-## 10. Observability: design for the next increment
+## 10. Export metrics without changing handlers
 
-The metrics endpoint and OpenTelemetry export described here are **planned**.
-Installing a Python instrumentation package today would not observe the native
-Rust request path. Framework instrumentation belongs in Rust, with trace
-context propagated across IPC when Python participates.
+For Prometheus, enable a separate management port:
 
-The proposed developer experience is to enable telemetry in deployment
-configuration and provide a service name and collector address. Ordinary
-handlers should need no telemetry decorators. Custom business counters and
-internal Python spans would use an optional Python API.
+```bash
+uv run --no-project silta dev examples/cookbook/app.py:app \
+  --runtime-bin ./target/debug/silta-runtime --metrics-listen 127.0.0.1:9464
+curl http://127.0.0.1:9464/metrics
+```
 
-| Signal | Automatic framework coverage | Developer contribution |
-| --- | --- | --- |
-| HTTP metrics | Request counts, status, duration histogram, active requests | Business-specific counters |
-| Worker metrics | Queue depth/wait, execution time, restarts by reason, timeouts, overload | Application-specific diagnostics |
-| Traces | HTTP → queue → Python/native operation, shared trace context | Internal business operations and external Python calls |
-| Logs | Structured lifecycle events, request/trace correlation | Normal application log messages |
+For OpenTelemetry Collector, configure the service and HTTP metrics endpoint:
 
-Use route templates such as `/orders/{id}` as metric labels, never raw URLs,
-user IDs, filenames, or request IDs. Histogram data can support aggregate
-p50/p95/p99 calculations; avoid publishing averages as latency percentiles.
-See the [Prometheus histogram guidance](https://prometheus.io/docs/practices/histograms/)
-and [label guidance](https://prometheus.io/docs/practices/naming/).
+```bash
+OTEL_SERVICE_NAME=orders-api \
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://127.0.0.1:4318/v1/metrics \
+uv run --no-project silta dev examples/cookbook/app.py:app \
+  --runtime-bin ./target/debug/silta-runtime
+```
 
-The integration target is an [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/)
-receiving OTLP and exporting to the operator's existing metrics, tracing, and
-logging backends. A Prometheus scrape endpoint is another planned option.
-Collector downtime must not block HTTP requests: exporters need bounded queues,
-batched asynchronous delivery, drop counters, and configurable trace sampling.
-Metrics should remain available when Python is down. Body contents and secrets
-must not be included in telemetry by default.
+Both exporters can run together. HTTP counts, latency histograms, active
+requests, queue depth/wait, worker readiness, failures/restarts, and export
+outcomes are collected automatically in Rust. No extra Python package or route
+decorator is required. Worker crashes do not erase counters or stop scraping;
+an unavailable Collector does not block request handling.
 
-This feature needs native instrumentation/export dependencies, IPC trace context,
-a small Python API for custom signals, and failure/overhead benchmarks. There is
-no working `App(observability=...)` option or `/metrics` route in this increment.
+Prometheus and Collector configuration files, exact instruments, PromQL examples,
+authentication headers, timeouts, cardinality limits, and shutdown behavior are
+covered in the [metrics guide](metrics.md).
+
+Metrics export is implemented. Distributed traces, correlated log export, and
+custom Python business-metric helpers remain planned. Installing a Python
+instrumentation library alone would not observe native Rust route execution.
 
 ## 11. Map your existing framework features
 

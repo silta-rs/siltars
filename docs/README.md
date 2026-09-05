@@ -11,6 +11,7 @@ Start here:
 - [Architecture overview](architecture/overview.md).
 - [Runtime architecture](architecture/runtime.md).
 - [Execution plan](architecture/execution-plan.md).
+- [Native metrics export](metrics.md).
 - [Database and stream adapters](architecture/database-adapters.md).
 - [Python boundary](architecture/python-boundary.md).
 - [Distribution and installation](architecture/distribution.md).

@@ -55,6 +55,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     dev_parser.add_argument("--host", default="127.0.0.1", help="Host to bind.")
     dev_parser.add_argument("--request-timeout-ms", default=None,
                              help="Request deadline in milliseconds (default: SILTA_REQUEST_TIMEOUT_MS or 30000).")
+    for flag, help_text in (
+        ("--metrics-listen", "Prometheus management address, e.g. 127.0.0.1:9464 (default: SILTA_METRICS_LISTEN)."),
+        ("--otlp-metrics-endpoint", "Full OTLP/HTTP protobuf metrics URL (default: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)."),
+        ("--service-name", "Telemetry service name (default: OTEL_SERVICE_NAME or app name)."),
+        ("--metrics-export-interval-ms", "Periodic metrics export interval (default: OTEL_METRIC_EXPORT_INTERVAL or 15000)."),
+        ("--metrics-export-timeout-ms", "Collector request timeout (default: OTEL_METRIC_EXPORT_TIMEOUT or 2000)."),
+    ):
+        dev_parser.add_argument(flag, default=None, help=help_text)
     dev_parser.add_argument("--port", default="8000", help="Port to bind.")
     dev_parser.add_argument(
         "--database-url",
@@ -105,6 +113,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             db_acquire_timeout_ms=args.db_acquire_timeout_ms,
             runtime_bin=args.runtime_bin,
             request_timeout_ms=args.request_timeout_ms,
+            metrics_options={flag: getattr(args, flag.replace("-", "_")) for flag in (
+                "metrics-listen", "otlp-metrics-endpoint", "service-name",
+                "metrics-export-interval-ms", "metrics-export-timeout-ms",
+            )},
         )
 
     if args.command == "_bridge":
@@ -150,6 +162,7 @@ def _dev(
     db_acquire_timeout_ms: str | None,
     runtime_bin: str | None,
     request_timeout_ms: str | None = None,
+    metrics_options: dict[str, str | None] | None = None,
 ) -> int:
     try:
         app = _load_app(target)
@@ -186,6 +199,9 @@ def _dev(
         "--python-bridge-target",
         target,
     ]
+    for flag, value in (metrics_options or {}).items():
+        if value is not None:
+            command.extend(["--" + flag, value])
     if request_timeout_ms is not None:
         command.extend(["--request-timeout-ms", request_timeout_ms])
     if database_url is not None:
