@@ -64,6 +64,12 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
                     .ok_or_else(|| anyhow::anyhow!("--port needs a value"))?;
                 config.port = value.parse::<u16>()?;
             }
+            "--request-timeout-ms" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--request-timeout-ms needs a value"))?;
+                config.request_timeout = Duration::from_millis(value.parse::<u64>()?);
+            }
             "--database-url" => {
                 let value = args
                     .next()
@@ -122,6 +128,11 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
 
 fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
     let mut config = RuntimeConfig::default();
+    config.request_timeout = env::var("SILTA_REQUEST_TIMEOUT_MS")
+        .ok()
+        .map(|value| value.parse::<u64>().map(Duration::from_millis))
+        .transpose()?
+        .unwrap_or(config.request_timeout);
     config.database_url = env::var("DATABASE_URL").ok();
     config.db_min_connections = env::var("SILTA_DB_MIN_CONNECTIONS")
         .ok()
@@ -149,6 +160,6 @@ fn print_help() {
         "silta-runtime --host 127.0.0.1 --port 8000 [--definition app.json] \
          [--database-url postgresql://...] [--db-min-connections 1] \
          [--db-max-connections 10] [--python-bridge-executable python] \
-         [--python-bridge-target app.py:app]"
+         [--python-bridge-target app.py:app] [--request-timeout-ms 30000]"
     );
 }

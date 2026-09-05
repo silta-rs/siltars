@@ -17,7 +17,7 @@ Python developer experience
 Rust native runtime
 ```
 
-[Documentation](docs/README.md) | [Status](docs/status.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
+[Documentation](docs/README.md) | [Cookbook](docs/cookbook.md) | [Status](docs/status.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
 
 ## What Silta Is
 

@@ -5,6 +5,7 @@ agents.
 
 Start here:
 
+- [Cookbook for FastAPI and Django developers](cookbook.md).
 - [Project vision](project.md).
 - [Project status](status.md).
 - [Architecture overview](architecture/overview.md).
