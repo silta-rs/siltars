@@ -85,6 +85,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Native database pool acquire timeout in milliseconds.",
     )
     dev_parser.add_argument(
+        "--clickhouse-url",
+        default=None,
+        help="ClickHouse HTTP URL for the experimental native ClickHouse routes. Defaults to CLICKHOUSE_URL.",
+    )
+    dev_parser.add_argument(
+        "--clickhouse-database",
+        default=None,
+        help="ClickHouse database for the experimental routes. Defaults to CLICKHOUSE_DATABASE or silta_poc.",
+    )
+    dev_parser.add_argument(
+        "--clickhouse-max-threads",
+        default=None,
+        help="Per-query ClickHouse max_threads for the experimental routes. Defaults to CLICKHOUSE_MAX_THREADS or the server default.",
+    )
+    dev_parser.add_argument(
         "--runtime-bin",
         default=None,
         help="Path to the silta-runtime binary. Defaults to SILTA_RUNTIME_BIN or packaged binary.",
@@ -113,6 +128,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             db_acquire_timeout_ms=args.db_acquire_timeout_ms,
             runtime_bin=args.runtime_bin,
             request_timeout_ms=args.request_timeout_ms,
+            clickhouse_url=args.clickhouse_url,
+            clickhouse_database=args.clickhouse_database,
+            clickhouse_max_threads=args.clickhouse_max_threads,
             metrics_options={flag: getattr(args, flag.replace("-", "_")) for flag in (
                 "metrics-listen", "otlp-metrics-endpoint", "service-name",
                 "metrics-export-interval-ms", "metrics-export-timeout-ms",
@@ -163,6 +181,9 @@ def _dev(
     runtime_bin: str | None,
     request_timeout_ms: str | None = None,
     metrics_options: dict[str, str | None] | None = None,
+    clickhouse_url: str | None = None,
+    clickhouse_database: str | None = None,
+    clickhouse_max_threads: str | None = None,
 ) -> int:
     try:
         app = _load_app(target)
@@ -212,6 +233,12 @@ def _dev(
         command.extend(["--db-max-connections", db_max_connections])
     if db_acquire_timeout_ms is not None:
         command.extend(["--db-acquire-timeout-ms", db_acquire_timeout_ms])
+    if clickhouse_url is not None:
+        command.extend(["--clickhouse-url", clickhouse_url])
+    if clickhouse_database is not None:
+        command.extend(["--clickhouse-database", clickhouse_database])
+    if clickhouse_max_threads is not None:
+        command.extend(["--clickhouse-max-threads", clickhouse_max_threads])
 
     env = os.environ.copy()
     process = subprocess.Popen(command, env=env)

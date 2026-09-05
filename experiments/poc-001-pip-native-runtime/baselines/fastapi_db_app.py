@@ -2,8 +2,10 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
+from urllib.parse import urlsplit
+
 import asyncpg
-from fastapi import Body, FastAPI
+from fastapi import Body, FastAPI, HTTPException
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
@@ -13,6 +15,14 @@ if not DATABASE_URL:
     )
 DATABASE_MIN_CONNECTIONS = int(os.environ.get("FASTAPI_DB_MIN_CONNECTIONS", "1"))
 DATABASE_MAX_CONNECTIONS = int(os.environ.get("FASTAPI_DB_MAX_CONNECTIONS", "10"))
+# Optional ClickHouse path for the experimental /ch/* routes. clickhouse-connect
+# is the official driver; its async client rides on aiohttp, and the per-host
+# connector limit is raised to match the PostgreSQL pool size so both baselines
+# get the same number of in-flight database requests.
+CLICKHOUSE_URL = os.environ.get("CLICKHOUSE_URL")
+CLICKHOUSE_DATABASE = os.environ.get("CLICKHOUSE_DATABASE", "silta_poc")
+CLICKHOUSE_MAX_CONNECTIONS = int(os.environ.get("FASTAPI_CH_MAX_CONNECTIONS", str(DATABASE_MAX_CONNECTIONS)))
+CLICKHOUSE_MAX_THREADS = os.environ.get("CLICKHOUSE_MAX_THREADS")
 
 
 @asynccontextmanager
@@ -22,10 +32,28 @@ async def lifespan(app: FastAPI):
         min_size=DATABASE_MIN_CONNECTIONS,
         max_size=DATABASE_MAX_CONNECTIONS,
     )
+    app.state.clickhouse = None
+    if CLICKHOUSE_URL:
+        import clickhouse_connect
+
+        parts = urlsplit(CLICKHOUSE_URL)
+        app.state.clickhouse = await clickhouse_connect.get_async_client(
+            host=parts.hostname or "127.0.0.1",
+            port=parts.port or 8123,
+            username=parts.username or "default",
+            password=parts.password or "",
+            database=CLICKHOUSE_DATABASE,
+            secure=parts.scheme == "https",
+            connector_limit=CLICKHOUSE_MAX_CONNECTIONS,
+            connector_limit_per_host=CLICKHOUSE_MAX_CONNECTIONS,
+            settings={"max_threads": int(CLICKHOUSE_MAX_THREADS)} if CLICKHOUSE_MAX_THREADS else None,
+        )
     try:
         yield
     finally:
         await app.state.pool.close()
+        if app.state.clickhouse is not None:
+            await app.state.clickhouse.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -110,6 +138,47 @@ async def get_rate(base: str, quote: str) -> dict[str, Any]:
         quote.upper(),
     )
     return _json_row(row) if row else {"missing": True}
+
+
+CLICKHOUSE_RATE_COLUMNS = (
+    "rate_type, asset_class, base, quote, toString(rate) AS rate, toString(ts_utc) AS ts_utc, source"
+)
+
+
+def _clickhouse():
+    client = getattr(app.state, "clickhouse", None)
+    if client is None:
+        raise HTTPException(status_code=503, detail="clickhouse is not configured for this baseline")
+    return client
+
+
+async def _clickhouse_latest(limit: int) -> dict[str, list[dict[str, Any]]]:
+    result = await _clickhouse().query(
+        f"SELECT {CLICKHOUSE_RATE_COLUMNS} FROM rates ORDER BY rates.ts_utc DESC LIMIT {int(limit)}"
+    )
+    return {"rates": [dict(zip(result.column_names, row)) for row in result.result_rows]}
+
+
+@app.get("/ch/rates")
+async def ch_list_rates() -> dict[str, list[dict[str, Any]]]:
+    return await _clickhouse_latest(100)
+
+
+@app.get("/ch/rates/1000")
+async def ch_list_rates_1000() -> dict[str, list[dict[str, Any]]]:
+    return await _clickhouse_latest(1000)
+
+
+@app.get("/ch/rates/{base}/{quote}")
+async def ch_get_rate(base: str, quote: str) -> dict[str, Any]:
+    result = await _clickhouse().query(
+        f"SELECT {CLICKHOUSE_RATE_COLUMNS} FROM rates "
+        "WHERE base = {base:String} AND quote = {quote:String} ORDER BY rates.ts_utc DESC LIMIT 1",
+        parameters={"base": base.upper(), "quote": quote.upper()},
+    )
+    if not result.result_rows:
+        return {"missing": True}
+    return dict(zip(result.column_names, result.result_rows[0]))
 
 
 @app.get("/setting")

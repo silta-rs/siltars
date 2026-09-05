@@ -63,6 +63,16 @@ Rust-authored typed schema
   -> Silta runtime module
 ```
 
+### ClickHouse (experimental)
+
+The runtime carries an experimental ClickHouse path behind `--clickhouse-url`.
+It uses the official `clickhouse` crate over HTTP with RowBinary decoding into
+typed rows, mirrors the PostgreSQL rate routes under `/ch/*`, and exists to
+measure an analytical store next to the transactional one. It is not an
+adapter contract yet: routes are still mapped by symbolic handler name and
+there is no query plan. See `experiments/poc-001-pip-native-runtime/benchmark.md`
+for the seed and the comparison against FastAPI with `clickhouse-connect`.
+
 ## Kafka And Streams
 
 Kafka should use the same adapter boundary. The runtime should support native
