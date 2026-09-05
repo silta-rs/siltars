@@ -119,6 +119,11 @@ worker before exiting. Child ownership is separate from the request I/O mutex.
 This covers normal signal-driven shutdown, not SIGKILL, runtime crashes, or
 arbitrary processes independently spawned by user handlers.
 
+On protocol EOF, the runtime releases the request I/O mutex before waiting for
+and reaping the worker. If the worker closed its pipe but remains alive, a
+one-second exit grace period is followed by kill and reap. The failed request
+returns 500 after cleanup; native routes remain available.
+
 Unsupported, non-finite, cyclic, excessively nested, or invalid-Unicode results
 produce a correlated 500 response, leaving the next request usable. JSON object
 keys must be strings; integers must fit the Serde JSON signed/unsigned 64-bit
@@ -151,7 +156,10 @@ Rust/Python HTTP integration suite. This suite checks automatic async execution,
 static native responses, exact integer boundaries and Unicode, event-loop reuse,
 malformed request JSON, and recovery after serialization errors. It also checks
 native/stdout noise without newlines and SIGTERM sent to either the CLI or the
-runtime during a long Python handler, asserting both runtime and worker are gone. It does not establish production readiness or a
+runtime during a long Python handler, asserting both runtime and worker are gone.
+Worker exit via `os._exit(7)` and pipe closure without exit must return 500,
+remove the worker PID (including zombies), and leave native routes answering 200.
+This suite does not establish production readiness or a
 performance improvement; fresh equivalent-workload benchmarks are still needed.
 
 ## Next Compiler Passes

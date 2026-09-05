@@ -58,6 +58,20 @@ async def echo(request):
     print("handler log")
     return {"body": request["body"]}
 
+@app.get("/worker-pid")
+def worker_pid():
+    return {"pid": os.getpid()}
+
+@app.post("/close-protocol")
+def close_protocol():
+    os.closerange(3, 256)
+    time.sleep(60)
+    return {"done": True}
+
+@app.post("/crash")
+def crash():
+    os._exit(7)
+
 @app.get("/loop")
 async def loop():
     return {"loop": id(asyncio.get_running_loop())}
@@ -80,7 +94,7 @@ def surrogate():
 
 
 @unittest.skipUnless(os.environ.get("SILTA_RUNTIME_BIN"), "requires built Rust runtime")
-class RuntimeIntegrationTests(unittest.TestCase):
+class RuntimeServerTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
@@ -131,6 +145,8 @@ class RuntimeIntegrationTests(unittest.TestCase):
         finally:
             connection.close()
 
+
+class RuntimeIntegrationTests(RuntimeServerTestCase):
     def test_native_stdout_without_newline_cannot_corrupt_protocol(self):
         for _ in range(2):
             self.assertEqual(self.request("POST", "/native-noise", '{}'), (200, {"ok": True}))
@@ -227,3 +243,26 @@ class ShutdownIntegrationTests(unittest.TestCase):
                         process.wait(timeout=5)
                         if thread:
                             thread.join(timeout=5)
+
+
+@unittest.skipUnless(os.environ.get("SILTA_RUNTIME_BIN") and os.name == "posix", "requires Rust runtime and POSIX PID existence check")
+class WorkerCrashIntegrationTests(RuntimeServerTestCase):
+    exit_route = "/crash"
+
+    def test_closed_worker_channel_is_reaped_before_http_error(self):
+        status, body = self.request("GET", "/worker-pid")
+        self.assertEqual(status, 200)
+        worker_pid = body["pid"]
+        self.assertEqual(self.request("POST", self.exit_route, '{}')[0], 500)
+        # kill(pid, 0) also succeeds for zombies: require the PID to be gone,
+        # not just a process whose state is no longer running.
+        with self.assertRaises(ProcessLookupError):
+            os.kill(worker_pid, 0)
+        self.assertIsNone(self.process.poll(), "runtime must remain alive")
+        self.assertEqual(self.request("GET", "/native"), (200, {"native": True}))
+
+
+class WorkerClosedPipeIntegrationTests(WorkerCrashIntegrationTests):
+    # EOF can precede process exit. Reaping must not block shutdown forever
+    # while a handler that closed its protocol descriptor continues running.
+    exit_route = "/close-protocol"
