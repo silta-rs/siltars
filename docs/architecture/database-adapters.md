@@ -91,3 +91,23 @@ db_acquire_timeout = 5000 ms
 
 Higher pool sizes should be tested only after the database server's own
 connection limit is raised.
+
+## Pool Acquire Ping
+
+SQLx enables `test_before_acquire` by default. Every time the pool hands out a
+connection it first sends a ping and waits for the reply, so a native database
+request pays two round trips to PostgreSQL instead of one. The runtime disables
+it in `pool_options()`: a connection that died while idle still fails fast on
+its first statement and is replaced, and the SQLx `max_lifetime` and
+`idle_timeout` defaults recycle stale connections without a per-request probe.
+
+Measured on the POC-001 compose database at one connection the request dropped
+from about two round trips to one (0.298 ms to 0.213 ms mean), and at fifty
+connections the one-row path gained between 13 and 49 percent depending on host
+load. The report is in
+`experiments/poc-001-pip-native-runtime/reports/pool-acquire-ping-2026-09-05/`.
+
+Pool sizing on that database: throughput scales with the pool up to about 50
+connections and stops there. A pool of 200 made p99 worse, and a cold pool with
+`min_connections = 1` cannot warm 200 connections through the Docker network
+inside the 5 s acquire timeout. Benchmark scripts now start with a warm pool.

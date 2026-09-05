@@ -6,6 +6,8 @@ The format is intentionally simple while the project is in bootstrap.
 
 ## Unreleased
 
+- Disabled the SQLx acquire ping on the native PostgreSQL pool: one round trip
+  per database request instead of two. Benchmark scripts start with a warm pool.
 - Initialized repository structure.
 - Added minimal Rust workspace skeleton.
 - Added minimal Python package skeleton.

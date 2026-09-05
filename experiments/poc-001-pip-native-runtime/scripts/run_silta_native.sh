@@ -9,8 +9,10 @@ PORT="${SILTA_PORT:-8000}"
 POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}"
 POSTGRES_PORT="${POSTGRES_PORT:-55432}"
 RUNTIME_BIN="${SILTA_RUNTIME_BIN:-$ROOT_DIR/target/debug/silta-runtime}"
-DB_MIN_CONNECTIONS="${SILTA_DB_MIN_CONNECTIONS:-1}"
 DB_MAX_CONNECTIONS="${SILTA_DB_MAX_CONNECTIONS:-10}"
+# Benchmark runs start with a warm pool: opening connections through the Docker
+# network during the first seconds of a load test distorts the early points.
+DB_MIN_CONNECTIONS="${SILTA_DB_MIN_CONNECTIONS:-$DB_MAX_CONNECTIONS}"
 DB_ACQUIRE_TIMEOUT_MS="${SILTA_DB_ACQUIRE_TIMEOUT_MS:-5000}"
 
 if [[ ! -x "$RUNTIME_BIN" ]]; then
