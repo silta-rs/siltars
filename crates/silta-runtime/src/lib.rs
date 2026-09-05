@@ -644,6 +644,25 @@ impl PythonBridge {
                 .await
                 .map_err(RuntimeRouteError::PythonBridgeIo)?;
             if bytes_read == 0 {
+                // Release request I/O before acquiring child ownership. Shutdown
+                // only acquires child, so these paths never nest the two locks.
+                drop(process);
+                let mut child = self.child.lock().await;
+                // EOF normally means the worker exited. A worker may also close
+                // its protocol pipe while staying alive; bound that wait so it
+                // cannot hold the child lock and prevent shutdown indefinitely.
+                match tokio::time::timeout(Duration::from_secs(1), child.wait()).await {
+                    Ok(result) => {
+                        result.map_err(RuntimeRouteError::PythonBridgeIo)?;
+                    }
+                    Err(_) => {
+                        // kill() also waits/reaps the child.
+                        child
+                            .kill()
+                            .await
+                            .map_err(RuntimeRouteError::PythonBridgeIo)?;
+                    }
+                }
                 return Err(RuntimeRouteError::PythonBridgeClosed);
             }
 
