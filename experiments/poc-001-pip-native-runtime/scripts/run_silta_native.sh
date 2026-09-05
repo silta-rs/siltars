@@ -12,6 +12,16 @@ RUNTIME_BIN="${SILTA_RUNTIME_BIN:-$ROOT_DIR/target/debug/silta-runtime}"
 DB_MIN_CONNECTIONS="${SILTA_DB_MIN_CONNECTIONS:-1}"
 DB_MAX_CONNECTIONS="${SILTA_DB_MAX_CONNECTIONS:-10}"
 DB_ACQUIRE_TIMEOUT_MS="${SILTA_DB_ACQUIRE_TIMEOUT_MS:-5000}"
+# Optional local ClickHouse for the experimental /ch/* routes (see seed_clickhouse.sh).
+CLICKHOUSE_URL="${CLICKHOUSE_URL:-}"
+CLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-silta_poc}"
+CLICKHOUSE_ARGS=()
+if [[ -n "$CLICKHOUSE_URL" ]]; then
+  CLICKHOUSE_ARGS=(--clickhouse-url "$CLICKHOUSE_URL" --clickhouse-database "$CLICKHOUSE_DATABASE")
+  if [[ -n "${CLICKHOUSE_MAX_THREADS:-}" ]]; then
+    CLICKHOUSE_ARGS+=(--clickhouse-max-threads "$CLICKHOUSE_MAX_THREADS")
+  fi
+fi
 
 if [[ ! -x "$RUNTIME_BIN" ]]; then
   echo "silta-runtime binary not found at $RUNTIME_BIN" >&2
@@ -32,4 +42,5 @@ exec "$EXPERIMENT_DIR/.venv/bin/silta" dev "$EXPERIMENT_DIR/silta_app.py:app" \
   --db-min-connections "$DB_MIN_CONNECTIONS" \
   --db-max-connections "$DB_MAX_CONNECTIONS" \
   --db-acquire-timeout-ms "$DB_ACQUIRE_TIMEOUT_MS" \
+  "${CLICKHOUSE_ARGS[@]}" \
   --runtime-bin "$RUNTIME_BIN"

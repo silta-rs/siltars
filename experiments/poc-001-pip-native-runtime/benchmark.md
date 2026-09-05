@@ -323,3 +323,39 @@ SILTA_DB_MAX_CONNECTIONS=50 SILTA_PORT=8104 ./scripts/run_silta_native.sh
 FASTAPI_DB_MAX_CONNECTIONS=50 FASTAPI_PORT=8103 ./scripts/run_fastapi_rates_baseline.sh
 python scripts/run_load_curve.py --concurrency 1,10,25,50,100,200,400
 ```
+
+## ClickHouse Path
+
+The experimental `/ch/*` routes read the same rate shape from a local ClickHouse
+instead of PostgreSQL. Seed it once (idempotent, 250,000 rows, same five pairs as
+the compose seed):
+
+```bash
+CLICKHOUSE_URL=http://127.0.0.1:8123 ./scripts/seed_clickhouse.sh
+```
+
+Start both servers with the ClickHouse URL exported; the scripts pass it through:
+
+```bash
+CLICKHOUSE_URL=http://127.0.0.1:8123 SILTA_DB_MAX_CONNECTIONS=50 SILTA_PORT=8104 ./scripts/run_silta_native.sh
+CLICKHOUSE_URL=http://127.0.0.1:8123 FASTAPI_DB_MAX_CONNECTIONS=50 FASTAPI_PORT=8103 ./scripts/run_fastapi_rates_baseline.sh
+```
+
+Then run the three row counts:
+
+```bash
+python scripts/run_load_curve.py --duration 6s --runs 1 --concurrency 10,50,200 \
+  --endpoint /ch/rates/EUR/USD --endpoint /ch/rates --endpoint /ch/rates/1000 \
+  --output-dir reports/clickhouse-alpha
+```
+
+Set `CLICKHOUSE_MAX_THREADS=1` for both servers: ClickHouse fans every query out
+to ten threads by default, which oversubscribes the server under concurrency.
+Results and the `ORDER BY` alias trap are recorded in
+[reports/clickhouse-alpha-2026-09-05](reports/clickhouse-alpha-2026-09-05/README.md).
+
+Silta uses the `clickhouse` crate (HTTP, RowBinary, typed rows, Serde JSON);
+FastAPI uses `clickhouse-connect` async (HTTP, aiohttp) with the per-host
+connector limit raised to the PostgreSQL pool size. Both convert `rate` and
+`ts_utc` to text server-side so the JSON payloads have the same shape.
+

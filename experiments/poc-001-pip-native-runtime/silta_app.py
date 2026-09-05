@@ -32,6 +32,21 @@ def get_rate():
     return {"base": "EUR", "quote": "USD", "rate": "1.0"}
 
 
+@app.get("/ch/rates", python=False)
+def ch_list_rates():
+    return {"rates": []}
+
+
+@app.get("/ch/rates/1000", python=False)
+def ch_list_rates_1000():
+    return {"rates": []}
+
+
+@app.get("/ch/rates/{base}/{quote}", python=False)
+def ch_get_rate():
+    return {"base": "EUR", "quote": "USD", "rate": "1.0"}
+
+
 @app.get("/setting", python=False)
 def get_setting():
     return {"id": 1, "name": "alpha", "value": "enabled"}

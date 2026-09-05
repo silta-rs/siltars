@@ -10,6 +10,7 @@ pg_password="$(docker exec "$container" printenv POSTGRES_PASSWORD)"
 pg_db="$(docker exec "$container" printenv POSTGRES_DB)"
 
 export DATABASE_URL="postgresql://${pg_user}:${pg_password}@${host}:${port}/${pg_db}"
+# CLICKHOUSE_URL and CLICKHOUSE_DATABASE pass through to the app when set.
 
 exec .venv/bin/python -m uvicorn baselines.fastapi_db_app:app \
   --host 127.0.0.1 \

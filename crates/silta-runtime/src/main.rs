@@ -36,6 +36,17 @@ fn native_application() -> Application {
     app.add_route(Route::new(Method::Get, "/rates", "list_rates"));
     app.add_route(Route::new(Method::Get, "/rates/bulk", "list_rates_bulk"));
     app.add_route(Route::new(Method::Get, "/rates/{base}/{quote}", "get_rate"));
+    app.add_route(Route::new(Method::Get, "/ch/rates", "ch_list_rates"));
+    app.add_route(Route::new(
+        Method::Get,
+        "/ch/rates/1000",
+        "ch_list_rates_1000",
+    ));
+    app.add_route(Route::new(
+        Method::Get,
+        "/ch/rates/{base}/{quote}",
+        "ch_get_rate",
+    ));
     app.add_route(Route::new(Method::Get, "/setting", "get_setting"));
     app.add_route(Route::new(Method::Patch, "/setting", "patch_setting"));
     app.add_route(Route::new(Method::Post, "/echo", "create_echo"));
@@ -106,6 +117,24 @@ fn parse_command() -> anyhow::Result<CommandConfig> {
                         })?
                         .parse()?,
                 );
+            }
+            "--clickhouse-url" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--clickhouse-url needs a value"))?;
+                config.clickhouse_url = Some(value);
+            }
+            "--clickhouse-max-threads" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--clickhouse-max-threads needs a value"))?;
+                config.clickhouse_max_threads = Some(value.parse::<u32>()?);
+            }
+            "--clickhouse-database" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--clickhouse-database needs a value"))?;
+                config.clickhouse_database = value;
             }
             "--database-url" => {
                 let value = args
@@ -212,6 +241,14 @@ fn parse_config_from_env() -> anyhow::Result<RuntimeConfig> {
         .map(|value| value.parse::<u64>().map(Duration::from_millis))
         .transpose()?
         .unwrap_or(config.db_acquire_timeout);
+    config.clickhouse_url = env::var("CLICKHOUSE_URL").ok();
+    if let Ok(database) = env::var("CLICKHOUSE_DATABASE") {
+        config.clickhouse_database = database;
+    }
+    config.clickhouse_max_threads = env::var("CLICKHOUSE_MAX_THREADS")
+        .ok()
+        .map(|value| value.parse::<u32>())
+        .transpose()?;
     config.python_bridge_executable = env::var("SILTA_PYTHON_BRIDGE_EXECUTABLE").ok();
     config.python_bridge_target = env::var("SILTA_PYTHON_BRIDGE_TARGET").ok();
 
@@ -222,7 +259,8 @@ fn print_help() {
     println!(
         "silta-runtime --host 127.0.0.1 --port 8000 [--definition app.json] \
          [--database-url postgresql://...] [--db-min-connections 1] \
-         [--db-max-connections 10] [--python-bridge-executable python] \
+         [--db-max-connections 10] \
+         [--clickhouse-url http://127.0.0.1:8123] [--clickhouse-database silta_poc] [--clickhouse-max-threads 1] [--python-bridge-executable python] \
          [--python-bridge-target app.py:app] [--request-timeout-ms 30000] \
          [--metrics-listen 127.0.0.1:9464] [--otlp-metrics-endpoint http://localhost:4318/v1/metrics] \
          [--service-name my-api] [--metrics-export-interval-ms 15000] [--metrics-export-timeout-ms 2000]"

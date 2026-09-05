@@ -20,7 +20,8 @@ use axum::response::IntoResponse;
 use axum::routing::{delete, get, head, options, patch, post, put, MethodRouter};
 use axum::Extension;
 use axum::{Json, Router};
-use serde::Serialize;
+use clickhouse::Client as ClickHouseClient;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use silta_core::{Application, ExecutionPlanError, Method, Route};
 use silta_router::{RouteTable, RouteTableError};
@@ -51,6 +52,8 @@ pub enum RuntimeError {
     Database(sqlx::Error),
     /// The PostgreSQL server rejected or did not accept a connection.
     DatabaseConnectionRefused(sqlx::Error),
+    /// The ClickHouse client could not reach the server or the probe query failed.
+    ClickHouse(clickhouse::error::Error),
     /// A route path is malformed.
     InvalidRoutePath { path: String, reason: String },
     /// The Python bridge process could not be started.
@@ -71,6 +74,7 @@ impl fmt::Display for RuntimeError {
             Self::Bind(error) => write!(f, "bind error: {error}"),
             Self::Server(error) => write!(f, "server error: {error}"),
             Self::Database(error) => write!(f, "database error: {error}"),
+            Self::ClickHouse(error) => write!(f, "clickhouse error: {error}"),
             Self::DatabaseConnectionRefused(error) => {
                 write!(f, "database connection refused: {error}")
             }
@@ -97,6 +101,7 @@ impl Error for RuntimeError {
             Self::Bind(error) => Some(error),
             Self::Server(error) => Some(error),
             Self::Database(error) => Some(error),
+            Self::ClickHouse(error) => Some(error),
             Self::DatabaseConnectionRefused(error) => Some(error),
             Self::InvalidRoutePath { .. } => None,
             Self::PythonBridge(error) => Some(error),
@@ -144,6 +149,14 @@ pub struct RuntimeConfig {
     pub db_max_connections: u32,
     /// Maximum time to wait for a database connection from the pool.
     pub db_acquire_timeout: Duration,
+    /// ClickHouse HTTP URL used by the experimental native ClickHouse routes.
+    pub clickhouse_url: Option<String>,
+    /// ClickHouse database that holds the experiment tables.
+    pub clickhouse_database: String,
+    /// Optional per-query `max_threads` for the ClickHouse routes. Point reads do
+    /// not benefit from a ten-way parallel scan per request, and under concurrency
+    /// the default fan-out oversubscribes the server.
+    pub clickhouse_max_threads: Option<u32>,
     /// Python executable used by bridge routes.
     pub python_bridge_executable: Option<String>,
     /// Python app target used by bridge routes.
@@ -161,6 +174,9 @@ impl Default for RuntimeConfig {
             db_min_connections: 1,
             db_max_connections: 10,
             db_acquire_timeout: Duration::from_secs(5),
+            clickhouse_url: None,
+            clickhouse_database: "silta_poc".to_owned(),
+            clickhouse_max_threads: None,
             python_bridge_executable: None,
             python_bridge_target: None,
         }
@@ -210,6 +226,10 @@ impl Runtime {
             Some(database_url) => Some(create_pool(database_url, &config).await?),
             None => None,
         };
+        let clickhouse = match config.clickhouse_url.as_deref() {
+            Some(url) => Some(create_clickhouse_client(url, &config).await?),
+            None => None,
+        };
         let address = SocketAddr::new(config.host, config.port);
         let listener = TcpListener::bind(address)
             .await
@@ -242,6 +262,7 @@ impl Runtime {
 
         let state = AppState {
             pool,
+            clickhouse,
             python_bridge: python_bridge.clone(),
         };
         let app = match native_router(&self.application, state) {
@@ -515,6 +536,9 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
         (Method::Get, "list_rates_bulk") => get(list_rates_bulk),
         (Method::Get, "get_rate") => get(get_rate),
         (Method::Get, "get_setting") => get(get_setting),
+        (Method::Get, "ch_get_rate") => get(ch_get_rate),
+        (Method::Get, "ch_list_rates") => get(ch_list_rates),
+        (Method::Get, "ch_list_rates_1000") => get(ch_list_rates_1000),
         (Method::Patch, "patch_setting") => patch(patch_setting),
         (Method::Post, "create_echo") => post(create_echo),
         (Method::Put, "replace_echo") => put(replace_echo),
@@ -631,7 +655,38 @@ async fn not_implemented_head() -> StatusCode {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pool: Option<PgPool>,
+    clickhouse: Option<ClickHouse>,
     python_bridge: Option<PythonBridge>,
+}
+
+/// ClickHouse client wrapper that keeps `AppState` printable.
+#[derive(Clone)]
+struct ClickHouse(ClickHouseClient);
+
+impl fmt::Debug for ClickHouse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ClickHouse(..)")
+    }
+}
+
+/// Connects the experimental ClickHouse client and probes the server once so a
+/// wrong URL or database fails at startup instead of on the first request.
+async fn create_clickhouse_client(
+    url: &str,
+    config: &RuntimeConfig,
+) -> Result<ClickHouse, RuntimeError> {
+    let mut client = ClickHouseClient::default()
+        .with_url(url)
+        .with_database(&config.clickhouse_database);
+    if let Some(threads) = config.clickhouse_max_threads {
+        client = client.with_setting("max_threads", threads.to_string());
+    }
+    client
+        .query("SELECT 1")
+        .fetch_one::<u8>()
+        .await
+        .map_err(RuntimeError::ClickHouse)?;
+    Ok(ClickHouse(client))
 }
 
 #[allow(clippy::io_other_error)]
@@ -839,6 +894,75 @@ async fn get_rate(
     }))
 }
 
+/// One rate row read from ClickHouse over RowBinary; numeric and time columns are
+/// converted to text server-side so the JSON shape matches the PostgreSQL path.
+#[derive(Debug, Serialize, Deserialize, clickhouse::Row)]
+struct ClickHouseRateRow {
+    rate_type: String,
+    asset_class: String,
+    base: String,
+    quote: String,
+    rate: String,
+    ts_utc: String,
+    source: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ClickHouseRatesResponse {
+    rates: Vec<ClickHouseRateRow>,
+}
+
+const CLICKHOUSE_RATE_COLUMNS: &str =
+    "rate_type, asset_class, base, quote, toString(rate) AS rate, toString(ts_utc) AS ts_utc, source";
+
+// `toString(ts_utc) AS ts_utc` shadows the column inside ORDER BY, so the queries
+// qualify it as `rates.ts_utc`: ordering by the alias sorts strings and drops the
+// read-in-order optimization (11.5 ms vs 2.5 ms per query on the 250k-row seed).
+async fn clickhouse_latest_rates(
+    client: &ClickHouseClient,
+    limit: u32,
+) -> Result<Vec<ClickHouseRateRow>, RuntimeRouteError> {
+    let sql = format!(
+        "SELECT {CLICKHOUSE_RATE_COLUMNS} FROM rates ORDER BY rates.ts_utc DESC LIMIT {limit}"
+    );
+    Ok(client.query(&sql).fetch_all::<ClickHouseRateRow>().await?)
+}
+
+async fn ch_list_rates(
+    State(state): State<AppState>,
+) -> Result<Json<ClickHouseRatesResponse>, RuntimeRouteError> {
+    let rates = clickhouse_latest_rates(state.clickhouse()?, 100).await?;
+    Ok(Json(ClickHouseRatesResponse { rates }))
+}
+
+async fn ch_list_rates_1000(
+    State(state): State<AppState>,
+) -> Result<Json<ClickHouseRatesResponse>, RuntimeRouteError> {
+    let rates = clickhouse_latest_rates(state.clickhouse()?, 1000).await?;
+    Ok(Json(ClickHouseRatesResponse { rates }))
+}
+
+async fn ch_get_rate(
+    State(state): State<AppState>,
+    Path((base, quote)): Path<(String, String)>,
+) -> Result<Json<Value>, RuntimeRouteError> {
+    let sql = format!(
+        "SELECT {CLICKHOUSE_RATE_COLUMNS} FROM rates WHERE base = ? AND quote = ? ORDER BY rates.ts_utc DESC LIMIT 1"
+    );
+    let row = state
+        .clickhouse()?
+        .query(&sql)
+        .bind(base.to_uppercase())
+        .bind(quote.to_uppercase())
+        .fetch_optional::<ClickHouseRateRow>()
+        .await?;
+
+    Ok(Json(match row {
+        Some(row) => json!(row),
+        None => json!({ "missing": true }),
+    }))
+}
+
 async fn get_setting(State(state): State<AppState>) -> Result<Json<SettingRow>, RuntimeRouteError> {
     let pool = state.pool()?;
     let row = sqlx::query_as::<_, SettingRow>(
@@ -904,10 +1028,21 @@ impl AppState {
     }
 }
 
+impl AppState {
+    fn clickhouse(&self) -> Result<&ClickHouseClient, RuntimeRouteError> {
+        self.clickhouse
+            .as_ref()
+            .map(|client| &client.0)
+            .ok_or(RuntimeRouteError::ClickHouseNotConfigured)
+    }
+}
+
 #[derive(Debug)]
 enum RuntimeRouteError {
     DatabaseNotConfigured,
     Database(sqlx::Error),
+    ClickHouseNotConfigured,
+    ClickHouse(clickhouse::error::Error),
     PythonBridgeNotConfigured,
     PythonBridgeIo(std::io::Error),
     PythonBridgeSerialize(serde_json::Error),
@@ -921,6 +1056,12 @@ enum RuntimeRouteError {
 impl From<sqlx::Error> for RuntimeRouteError {
     fn from(error: sqlx::Error) -> Self {
         Self::Database(error)
+    }
+}
+
+impl From<clickhouse::error::Error> for RuntimeRouteError {
+    fn from(error: clickhouse::error::Error) -> Self {
+        Self::ClickHouse(error)
     }
 }
 
@@ -938,6 +1079,14 @@ impl IntoResponse for RuntimeRouteError {
             Self::Database(error) => {
                 eprintln!("silta runtime database query failed: {error}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "database query failed")
+            }
+            Self::ClickHouseNotConfigured => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "clickhouse is not configured for this runtime",
+            ),
+            Self::ClickHouse(error) => {
+                eprintln!("silta runtime clickhouse query failed: {error}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "clickhouse query failed")
             }
             Self::PythonBridgeIo(error) => {
                 eprintln!("silta python bridge I/O failed: {error}");
@@ -997,7 +1146,7 @@ async fn shutdown_signal() -> Result<(), std::io::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::Runtime;
+    use super::{Runtime, RuntimeConfig};
     use silta_core::{Application, Method, Route};
 
     #[test]
@@ -1092,5 +1241,14 @@ mod tests {
             Runtime::prepare(future),
             Err(super::RuntimeError::ExecutionPlan(_))
         ));
+    }
+
+    #[test]
+    fn clickhouse_is_off_by_default_and_targets_the_poc_database() {
+        let config = RuntimeConfig::default();
+
+        assert!(config.clickhouse_url.is_none());
+        assert_eq!(config.clickhouse_database, "silta_poc");
+        assert!(config.clickhouse_max_threads.is_none());
     }
 }
