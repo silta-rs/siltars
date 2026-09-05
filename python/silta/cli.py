@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from silta import App
+from silta._json import validate_json
 
 
 class _ForwardedSignal(Exception):
@@ -103,7 +104,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.command == "_bridge":
-        return _bridge(args.target)
+        # Isolate the protocol before importing any application/native library.
+        # FD 1 (including C stdio and inherited subprocess output) becomes a log
+        # stream; only this private, non-inheritable duplicate carries replies.
+        sys.stdout.flush()
+        protocol_fd = os.dup(1)
+        os.set_inheritable(protocol_fd, False)
+        try:
+            os.dup2(2, 1)
+            protocol = os.fdopen(protocol_fd, "w", encoding="utf-8", buffering=1)
+        except BaseException:
+            os.close(protocol_fd)
+            raise
+        with protocol:
+            return _bridge(args.target, protocol_output=protocol)
 
     parser.error(f"unknown command: {args.command}")
     return 2
@@ -112,11 +126,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _inspect(target: str) -> int:
     try:
         app = _load_app(target)
+        description = app.describe()
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    print(json.dumps(app.describe(), indent=2, sort_keys=True))
+    print(json.dumps(description, indent=2, sort_keys=True, allow_nan=False))
     return 0
 
 
@@ -133,6 +148,7 @@ def _dev(
 ) -> int:
     try:
         app = _load_app(target)
+        description = app.describe()
     except Exception as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
@@ -149,7 +165,7 @@ def _dev(
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", prefix="silta-app-", suffix=".json", delete=False
     ) as definition:
-        json.dump(app.describe(), definition, sort_keys=True)
+        json.dump(description, definition, sort_keys=True, allow_nan=False)
         definition_path = definition.name
 
     command = [
@@ -210,7 +226,7 @@ def _wait_for_child(process: subprocess.Popen[Any]) -> int:
             signal.signal(signum, handler)
 
 
-def _bridge(target: str) -> int:
+def _bridge(target: str, *, protocol_output: Any = None) -> int:
     try:
         with contextlib.redirect_stdout(sys.stderr):
             app = _load_app(target)
@@ -227,7 +243,7 @@ def _bridge(target: str) -> int:
                 # A malformed protocol request must close the channel, so Rust
                 # observes EOF instead of waiting forever for a skipped reply.
                 response = _handle_bridge_line(line, handlers, asyncio_runner)
-                print(_encode_bridge_response(response), flush=True)
+                print(_encode_bridge_response(response), file=protocol_output, flush=True)
         return 0
     except Exception as error:
         print(f"bridge error: {error}", file=sys.stderr)
@@ -314,29 +330,11 @@ def _handle_bridge_line(
         }
 
 
-def _validate_bridge_json(value: Any) -> None:
-    # Match the finite JSON representation accepted by the Rust worker protocol.
-    # A depth limit also terminates cycles without a recursive Python traversal.
-    pending = [(value, 0)]
-    while pending:
-        item, depth = pending.pop()
-        if depth > 64:
-            raise ValueError("bridge JSON exceeds maximum depth of 64")
-        if isinstance(item, dict):
-            if any(not isinstance(key, str) for key in item):
-                raise TypeError("JSON object keys must be strings")
-            pending.extend((child, depth + 1) for child in item.values())
-        elif isinstance(item, (list, tuple)):
-            pending.extend((child, depth + 1) for child in item)
-        elif type(item) is int and not -(2**63) <= item < 2**64:
-            raise ValueError("integer exceeds the bridge JSON integer range")
-
-
 def _encode_bridge_response(response: dict[str, Any]) -> str:
     """Serialize one response without allowing application data to kill the worker."""
 
     try:
-        _validate_bridge_json(response)
+        validate_json(response)
         encoded = json.dumps(response, separators=(",", ":"), allow_nan=False, ensure_ascii=False)
         encoded.encode("utf-8")  # Reject unpaired surrogates before writing a reply.
         return encoded

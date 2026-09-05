@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::future::IntoFuture;
 use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::Stdio;
@@ -28,7 +29,7 @@ use sqlx::{Connection, PgConnection, PgPool};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 
 /// Errors returned while preparing the runtime.
 #[derive(Debug)]
@@ -193,7 +194,7 @@ impl Runtime {
 
         let state = AppState {
             pool,
-            python_bridge,
+            python_bridge: python_bridge.clone(),
         };
         let app = native_router(&self.application, state)?;
         let address = SocketAddr::new(config.host, config.port);
@@ -201,10 +202,35 @@ impl Runtime {
             .await
             .map_err(RuntimeError::Bind)?;
 
-        axum::serve(listener, app)
-            .with_graceful_shutdown(shutdown_signal())
-            .await
-            .map_err(RuntimeError::Server)
+        let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        let server = axum::serve(listener, app)
+            .with_graceful_shutdown(async {
+                let _ = stop_rx.await;
+            })
+            .into_future();
+        tokio::pin!(server);
+        let result = tokio::select! {
+            result = &mut server => result,
+            signal = shutdown_signal() => {
+                let _ = stop_tx.send(());
+                match signal {
+                    Err(error) => Err(error),
+                    Ok(()) => match tokio::time::timeout(Duration::from_secs(5), &mut server).await {
+                        Ok(result) => result,
+                        Err(_) => {
+                            eprintln!("silta-runtime: shutdown grace period expired; stopping Python worker");
+                            Ok(())
+                        }
+                    },
+                }
+            }
+        };
+        // Child ownership is independent of the request I/O lock: an active
+        // handler cannot prevent kill + wait/reap after the grace period.
+        if let Some(bridge) = python_bridge {
+            bridge.shutdown().await?;
+        }
+        result.map_err(RuntimeError::Server)
     }
 }
 
@@ -519,11 +545,11 @@ pub struct AppState {
 #[derive(Debug, Clone)]
 struct PythonBridge {
     process: Arc<Mutex<PythonBridgeProcess>>,
+    child: Arc<Mutex<Child>>,
 }
 
 #[derive(Debug)]
 struct PythonBridgeProcess {
-    child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: u64,
@@ -564,13 +590,26 @@ impl PythonBridge {
             .ok_or_else(|| RuntimeError::PythonBridge(io_other("missing stdout")))?;
 
         Ok(Self {
+            child: Arc::new(Mutex::new(child)),
             process: Arc::new(Mutex::new(PythonBridgeProcess {
-                child,
                 stdin,
                 stdout: BufReader::new(stdout),
                 next_id: 1,
             })),
         })
+    }
+
+    async fn shutdown(&self) -> Result<(), RuntimeError> {
+        let mut child = self.child.lock().await;
+        if child
+            .try_wait()
+            .map_err(RuntimeError::PythonBridge)?
+            .is_none()
+        {
+            // Tokio's kill also waits for the child, preventing zombie processes.
+            child.kill().await.map_err(RuntimeError::PythonBridge)?;
+        }
+        Ok(())
     }
 
     async fn call(
@@ -605,7 +644,6 @@ impl PythonBridge {
                 .await
                 .map_err(RuntimeRouteError::PythonBridgeIo)?;
             if bytes_read == 0 {
-                let _ = process.child.wait().await;
                 return Err(RuntimeRouteError::PythonBridgeClosed);
             }
 
@@ -957,8 +995,20 @@ impl IntoResponse for RuntimeRouteError {
     }
 }
 
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+async fn shutdown_signal() -> Result<(), std::io::Error> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut terminate = signal(SignalKind::terminate())?;
+        let mut hangup = signal(SignalKind::hangup())?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => result,
+            _ = terminate.recv() => Ok(()),
+            _ = hangup.recv() => Ok(()),
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c().await
 }
 
 #[cfg(test)]

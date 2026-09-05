@@ -121,6 +121,26 @@ class AppRouteValidationTests(unittest.TestCase):
             with self.subTest(body=body), self.assertRaises((TypeError, ValueError)):
                 App().get("/bad", response=body)
 
+    def test_static_response_must_fit_lossless_rust_json_contract(self):
+        for value in (2**100, -(2**100), "\ud800", {"\udfff": "x"}, {"nested": [2**100]}):
+            for keyword in ("response", "native_response"):
+                with self.subTest(value=repr(value), keyword=keyword):
+                    with self.assertRaises((TypeError, ValueError)):
+                        App().get("/bad", **{keyword: value})
+
+    def test_mutated_static_response_is_revalidated_before_export(self):
+        body = {"ok": 1}
+        app = App()
+        app.get("/value", response=body)(lambda: None)
+        body["ok"] = 2**100
+        with self.assertRaises(ValueError):
+            app.describe()
+
+    def test_direct_route_rejects_lossy_static_values(self):
+        for value in (2**100, "\udfff", {"key": [-(2**100)]}):
+            with self.subTest(value=repr(value)), self.assertRaises(ValueError):
+                Route("GET", "/bad", lambda: None, native_response=value)
+
 
 if __name__ == "__main__":
     unittest.main()

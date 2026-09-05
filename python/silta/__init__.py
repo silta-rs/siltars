@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-import json
+from ._json import validate_json
 from typing import Any, Callable, Literal, TypeAlias, TypeVar
 
 Handler: TypeAlias = Callable[..., Any]
@@ -63,6 +63,8 @@ class Route:
     execution: RouteExecution | None = None
 
     def __post_init__(self) -> None:
+        if self.native_response is not None:
+            validate_json(self.native_response)
         # Direct Route construction retains the original Pre-Alpha signature.
         execution = self.execution
         if execution is None:
@@ -115,7 +117,7 @@ class App:
             raise TypeError("python must be True, False, or None")
         route_response = native_response if native_response is not None else response
         if route_response is not None:
-            json.dumps(route_response, allow_nan=False)
+            validate_json(route_response)
 
         def decorator(handler: HandlerT) -> HandlerT:
             self._routes.append(
@@ -264,11 +266,14 @@ class App:
     def describe(self) -> dict[str, Any]:
         """Return a serializable description of the current application."""
 
-        return {
+        description = {
             "plan_version": EXECUTION_PLAN_VERSION,
             "name": self.name,
             "routes": [self._describe_route(route) for route in self._routes],
         }
+        # Route payloads may have been mutated after registration.
+        validate_json(description)
+        return description
 
     @staticmethod
     def _describe_route(route: Route) -> dict[str, Any]:

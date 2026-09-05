@@ -104,10 +104,20 @@ Hybrid handlers currently accept either no arguments or one positional request
 dictionary containing `body`. FastAPI-style typed arguments, dependencies,
 headers and multipart inputs are not implemented in this increment.
 
+IPC replies use a private, non-inheritable descriptor duplicated from the
+runtime pipe before the worker imports application code. FD 1 is redirected to
+stderr, so `os.write(1, ...)`, native C stdio, and inherited subprocess stdout
+cannot interleave with protocol replies, even without a trailing newline.
+
 Each Python worker reuses one event loop. It is still a sequential worker;
 background tasks do not progress while it waits synchronously for the next IPC
 line. Async resource cleanup occurs on normal worker exit. Worker timeouts,
-restarts, and a fully asynchronous supervisor are still required.
+restarts, and a fully asynchronous supervisor are still required. On Unix the
+runtime handles SIGINT, SIGTERM, and SIGHUP: it stops accepting new connections,
+allows up to five seconds for in-flight requests, then kills and reaps the
+worker before exiting. Child ownership is separate from the request I/O mutex.
+This covers normal signal-driven shutdown, not SIGKILL, runtime crashes, or
+arbitrary processes independently spawned by user handlers.
 
 Unsupported, non-finite, cyclic, excessively nested, or invalid-Unicode results
 produce a correlated 500 response, leaving the next request usable. JSON object
@@ -115,6 +125,13 @@ keys must be strings; integers must fit the Serde JSON signed/unsigned 64-bit
 range. The maximum response envelope depth is 64. Malformed IPC requests fail
 closed so Rust observes EOF; automatic worker recovery is not yet implemented.
 Duplicate handler qualified names are rejected, not silently overwritten.
+
+The same JSON validator checks static `response`/`native_response` values,
+direct `Route` construction, and the whole plan at export (including payloads
+mutated after registration). Integers outside `[-2**63, 2**64 - 1]`, surrogate
+code points, non-finite floats, and non-string object keys fail before Rust is
+started. Large integers are rejected rather than rounded to floating point;
+use an explicit string representation if that is the application's contract.
 
 ## Verification
 
@@ -131,8 +148,10 @@ PYTHONPATH=python SILTA_RUNTIME_BIN="$PWD/target/debug/silta-runtime" python -m 
 
 CI runs on pull requests to both `main` and `dev`, including the actual
 Rust/Python HTTP integration suite. This suite checks automatic async execution,
-static native responses, event-loop reuse, malformed request JSON, and recovery
-after serialization errors. It does not establish production readiness or a
+static native responses, exact integer boundaries and Unicode, event-loop reuse,
+malformed request JSON, and recovery after serialization errors. It also checks
+native/stdout noise without newlines and SIGTERM sent to either the CLI or the
+runtime during a long Python handler, asserting both runtime and worker are gone. It does not establish production readiness or a
 performance improvement; fresh equivalent-workload benchmarks are still needed.
 
 ## Next Compiler Passes
