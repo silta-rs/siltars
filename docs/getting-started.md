@@ -5,7 +5,7 @@ show the current Python-facing API shape.
 
 ## Requirements
 
-- Rust 1.88 or newer (the workspace and locked dependencies require it).
+- Rust 1.89 or newer (the workspace and locked dependencies require it).
 - Python 3.10 or newer.
 
 ## Verify Rust Crates
