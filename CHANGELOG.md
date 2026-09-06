@@ -11,6 +11,8 @@ The format is intentionally simple while the project is in bootstrap.
 - Added an experimental ClickHouse path (`--clickhouse-url`, `/ch/*` routes) with
   a local seed script and a FastAPI `clickhouse-connect` baseline for 1, 100 and
   1000-row reads.
+- Disabled the SQLx acquire ping on the native PostgreSQL pool: one round trip
+  per database request instead of two. Benchmark scripts start with a warm pool.
 - Initialized repository structure.
 - Added minimal Rust workspace skeleton.
 - Added minimal Python package skeleton.
