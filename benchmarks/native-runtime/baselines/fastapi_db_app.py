@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 import asyncpg
 from fastapi import Body, FastAPI, HTTPException
 
+from baselines.mock_catalog import MOCK_RATES, clamp
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError(
@@ -122,6 +124,13 @@ async def list_rates_bulk() -> dict[str, Any]:
         for row in rows
     ]
     return {"count": len(rates), "rates": rates}
+
+
+@app.get("/mock/rates/{count}")
+async def mock_rates(count: int) -> dict[str, Any]:
+    """Serialization-only route: no database, identical bytes to the Rust mock route."""
+    n = clamp(count)
+    return {"count": n, "rates": MOCK_RATES[:n]}
 
 
 @app.get("/rates/{base}/{quote}")

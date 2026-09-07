@@ -22,6 +22,11 @@ def list_rates():
     return {"rates": []}
 
 
+@app.get("/mock/rates/{count}", python=False)
+def mock_rates():
+    return {"count": 0, "rates": []}
+
+
 @app.get("/rates/bulk", python=False)
 def list_rates_bulk():
     return {"count": 0, "rates": []}

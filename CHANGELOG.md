@@ -6,6 +6,9 @@ The format is intentionally simple while the project is in bootstrap.
 
 ## Unreleased
 
+- Added `GET /mock/rates/{count}`, a serialization-only route over a deterministic
+  in-memory catalog, plus an `ORJSONResponse` FastAPI baseline, so large JSON
+  responses can be compared without a database in the loop.
 - Raised the minimum supported Rust version (MSRV) from 1.88 to 1.89 to match
   the requirements of the ClickHouse 0.15 dependency family.
 - Added an experimental ClickHouse path (`--clickhouse-url`, `/ch/*` routes) with

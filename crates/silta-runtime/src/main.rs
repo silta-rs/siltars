@@ -35,6 +35,7 @@ fn native_application() -> Application {
     app.add_route(Route::new(Method::Get, "/ping", "ping"));
     app.add_route(Route::new(Method::Get, "/rates", "list_rates"));
     app.add_route(Route::new(Method::Get, "/rates/bulk", "list_rates_bulk"));
+    app.add_route(Route::new(Method::Get, "/mock/rates/{count}", "mock_rates"));
     app.add_route(Route::new(Method::Get, "/rates/{base}/{quote}", "get_rate"));
     app.add_route(Route::new(Method::Get, "/ch/rates", "ch_list_rates"));
     app.add_route(Route::new(

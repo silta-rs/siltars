@@ -10,13 +10,14 @@ use std::fmt;
 use std::future::IntoFuture;
 use std::io::ErrorKind;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
 
 use axum::body::Bytes;
 use axum::extract::{Path, Request, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
-use axum::http::StatusCode;
+use axum::http::{header, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, head, options, patch, post, put, MethodRouter};
@@ -275,6 +276,7 @@ impl Runtime {
             clickhouse,
             mysql_pool,
             python_bridge: python_bridge.clone(),
+            mock_rates: Arc::new(build_mock_rates(MOCK_RATES_MAX)),
         };
         let app = match native_router(&self.application, state) {
             Ok(app) => app.layer(middleware::from_fn_with_state(
@@ -591,6 +593,7 @@ fn method_router_for_route(route: &Route) -> MethodRouter<AppState> {
         (Method::Get, "ping") => get(ping),
         (Method::Get, "list_rates") => get(list_rates),
         (Method::Get, "list_rates_bulk") => get(list_rates_bulk),
+        (Method::Get, "mock_rates") => get(mock_rates),
         (Method::Get, "get_rate") => get(get_rate),
         (Method::Get, "get_setting") => get(get_setting),
         (Method::Get, "ch_get_rate") => get(ch_get_rate),
@@ -719,6 +722,8 @@ pub struct AppState {
     clickhouse: Option<ClickHouse>,
     mysql_pool: Option<MySqlPool>,
     python_bridge: Option<PythonBridge>,
+    /// Deterministic in-memory catalog used by the serialization-only mock route.
+    mock_rates: Arc<Vec<BulkRateItem>>,
 }
 
 /// ClickHouse client wrapper that keeps `AppState` printable.
@@ -887,6 +892,83 @@ async fn list_rates(
     .await?;
 
     Ok(Json(RatesResponse { rates: rows }))
+}
+
+/// Upper bound of rows the mock catalog route will serialize per request.
+pub const MOCK_RATES_MAX: usize = 10_000;
+
+const MOCK_PAIRS: [(&str, &str, u64); 5] = [
+    ("EUR", "USD", 108_000_000),
+    ("USD", "EUR", 92_500_000),
+    ("GBP", "USD", 127_000_000),
+    ("USD", "JPY", 14_650_000_000),
+    ("BTC", "USD", 6_500_000_000_000),
+];
+
+/// Builds the deterministic in-memory catalog behind `GET /mock/rates/{count}`.
+///
+/// The route exists to measure the framework alone: no database round trip, no
+/// I/O, just turning already-loaded records into a nested JSON response. The
+/// FastAPI baselines build the identical list with the same formulas, so the
+/// response bodies are byte-for-byte equal for every `count`.
+fn build_mock_rates(count: usize) -> Vec<BulkRateItem> {
+    (0..count)
+        .map(|i| {
+            let (base, quote, rate_micro) = MOCK_PAIRS[i % MOCK_PAIRS.len()];
+            let rate = rate_micro + (i as u64 % 1000) * 1000;
+            let seconds = (i % 86_400) as u64;
+            BulkRateItem {
+                id: i as i64 + 1,
+                instrument: BulkInstrument {
+                    rate_type: "spot".to_owned(),
+                    asset_class: "fiat".to_owned(),
+                    base: base.to_owned(),
+                    quote: quote.to_owned(),
+                },
+                value: BulkRateValue {
+                    rate: format!("{}.{:08}", rate / 100_000_000, rate % 100_000_000),
+                    ts_utc: format!(
+                        "2026-01-01T{:02}:{:02}:{:02}+00:00",
+                        seconds / 3600,
+                        seconds % 3600 / 60,
+                        seconds % 60
+                    ),
+                },
+                source: BulkSource {
+                    code: "silta-poc-seed".to_owned(),
+                    provider: "Silta POC Market Data".to_owned(),
+                    region: "local".to_owned(),
+                    tier: "alpha".to_owned(),
+                },
+            }
+        })
+        .collect()
+}
+
+#[derive(Serialize)]
+struct MockRatesResponse<'a> {
+    count: usize,
+    rates: &'a [BulkRateItem],
+}
+
+/// Serializes the first `count` mock records (clamped to 1..=MOCK_RATES_MAX)
+/// straight from the shared in-memory catalog, without cloning the rows.
+async fn mock_rates(
+    State(state): State<AppState>,
+    Path(count): Path<usize>,
+) -> Result<axum::response::Response, RuntimeRouteError> {
+    let count = count.clamp(1, MOCK_RATES_MAX);
+    let body = serde_json::to_vec(&MockRatesResponse {
+        count,
+        rates: &state.mock_rates[..count],
+    })
+    .map_err(RuntimeRouteError::PythonBridgeSerialize)?;
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        body,
+    )
+        .into_response())
 }
 
 async fn list_rates_bulk(
@@ -1484,5 +1566,18 @@ mod tests {
         assert_eq!(options.get_min_connections(), 7);
         assert_eq!(options.get_max_connections(), 42);
         assert_eq!(options.get_acquire_timeout(), config.db_acquire_timeout);
+    }
+
+    #[test]
+    fn mock_rates_are_deterministic_and_match_the_python_formula() {
+        let rows = super::build_mock_rates(3);
+        assert_eq!(rows.len(), 3);
+        let first = serde_json::to_string(&rows[0]).expect("json");
+        assert_eq!(
+            first,
+            r#"{"id":1,"instrument":{"rate_type":"spot","asset_class":"fiat","base":"EUR","quote":"USD"},"value":{"rate":"1.08000000","ts_utc":"2026-01-01T00:00:00+00:00"},"source":{"code":"silta-poc-seed","provider":"Silta POC Market Data","region":"local","tier":"alpha"}}"#
+        );
+        assert_eq!(rows[1].value.rate, "0.92501000");
+        assert_eq!(rows[2].value.ts_utc, "2026-01-01T00:00:02+00:00");
     }
 }

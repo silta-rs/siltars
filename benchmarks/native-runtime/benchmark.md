@@ -365,3 +365,25 @@ Silta uses the `clickhouse` crate (HTTP, RowBinary, typed rows, Serde JSON);
 FastAPI uses `clickhouse-connect` async (HTTP, aiohttp) with the per-host
 connector limit raised to the PostgreSQL pool size. Both convert `rate` and
 `ts_utc` to text server-side so the JSON payloads have the same shape.
+
+## Mock Catalog: Serialization Only
+
+`GET /mock/rates/{count}` returns the first `count` records (1 to 10,000) of a
+deterministic in-memory catalog with the same nested shape as `/rates/bulk`.
+There is no database and no I/O behind it, so the route measures what the
+runtime itself adds: HTTP, routing and turning already-loaded records into
+JSON. The Rust runtime serializes a borrowed slice of the shared catalog with
+Serde; the FastAPI baselines slice the same list built by
+`baselines/mock_catalog.py`. The bodies are byte-identical for every `count`,
+and the load-curve runner should verify that before measuring.
+
+Both FastAPI configurations required by the methodology are in `baselines/`:
+`fastapi_db_app.py` (conventional, Pydantic response path) and
+`fastapi_db_app_orjson.py` (`ORJSONResponse`, no response model).
+
+```bash
+python scripts/run_load_curve.py --duration 30s --runs 3 --concurrency 50 \
+  --endpoint /mock/rates/1000 --endpoint /mock/rates/3000 --endpoint /mock/rates/10000 \
+  --output-dir reports/mock-catalog
+```
+
