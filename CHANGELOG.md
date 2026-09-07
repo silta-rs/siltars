@@ -8,7 +8,10 @@ The format is intentionally simple while the project is in bootstrap.
 
 - Added `GET /mock/rates/{count}`, a serialization-only route over a deterministic
   in-memory catalog, plus an `ORJSONResponse` FastAPI baseline, so large JSON
-  responses can be compared without a database in the loop.
+  responses can be compared without a database in the loop. The first report
+  (`experiments/poc-001-pip-native-runtime/reports/mock-catalog-2026-09-07/`)
+  and the alternating-run orchestrator behind it (`scripts/bench_program.py`,
+  `scripts/run_mock_catalog_benchmark.sh`) ship with it.
 - Raised the minimum supported Rust version (MSRV) from 1.88 to 1.89 to match
   the requirements of the ClickHouse 0.15 dependency family.
 - Added an experimental ClickHouse path (`--clickhouse-url`, `/ch/*` routes) with

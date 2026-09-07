@@ -382,8 +382,22 @@ Both FastAPI configurations required by the methodology are in `baselines/`:
 `fastapi_db_app_orjson.py` (`ORJSONResponse`, no response model).
 
 ```bash
-python scripts/run_load_curve.py --duration 30s --runs 3 --concurrency 50 \
-  --endpoint /mock/rates/1000 --endpoint /mock/rates/3000 --endpoint /mock/rates/10000 \
-  --output-dir reports/mock-catalog
+SILTA_RUNTIME_BIN=../../target/release/silta-runtime scripts/run_mock_catalog_benchmark.sh
 ```
+
+The runner checks the response hashes across servers, then runs the one-core
+profile (Silta with one tokio thread against one uvicorn worker of each FastAPI
+configuration) and the multi-core profile (ten tokio threads against ten ORJSON
+workers), 30 s points, three runs with rotated target order.
+
+Results from 2026-09-07 are in `reports/mock-catalog-2026-09-07/`. On one core
+Silta served 100 rows at 2.05x the ORJSON baseline and 2.5x the conventional
+one, and 1000 to 10000 rows at 1.6x and 2.3 to 2.5x, at about half the CPU per
+request in every cell. With ten threads against ten workers the ratio was 1.65
+to 1.9x at similar total CPU and a third of the memory. A saturation check
+showed that a single `oha` process caps the Rust side on this laptop (three
+load generators in parallel drove the runtime to twice the throughput), so the
+multi-core ratios are floors. The Python side of this route is as fast as Python
+gets, because the dictionaries are built once at import and `orjson` only
+encodes; real routes build their objects per request.
 

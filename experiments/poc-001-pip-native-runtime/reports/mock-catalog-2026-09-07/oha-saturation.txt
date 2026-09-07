@@ -1,0 +1,4 @@
+## load generator saturation check, Silta 10 threads, /mock/rates/1000, 10 s each, 2026-09-07 23:15:54
+one oha, c=50: rps=4504, server cpu cores=2.44
+three oha in parallel, c=50 each: rps=3416 3426 3406 sum=10248, server cpu cores=4.74
+load:  48.69 42.53 26.75

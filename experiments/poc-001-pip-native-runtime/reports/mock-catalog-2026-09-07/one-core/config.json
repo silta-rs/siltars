@@ -1,0 +1,10 @@
+{"output_dir": "<scratch>/mock-bench-2026-09-07/p1-one-core", "duration": "30s", "runs": 3, "concurrency": 50,
+ "targets": [
+   {"name": "fastapi-conventional", "url": "http://127.0.0.1:8622", "pid": 68065},
+   {"name": "fastapi-orjson", "url": "http://127.0.0.1:8623", "pid": 68072},
+   {"name": "silta-1thread", "url": "http://127.0.0.1:8621", "pid": 68047}],
+ "cells": [
+   {"name": "mock-100", "path": "/mock/rates/100"},
+   {"name": "mock-1000", "path": "/mock/rates/1000"},
+   {"name": "mock-3000", "path": "/mock/rates/3000"},
+   {"name": "mock-10000", "path": "/mock/rates/10000"}]}
