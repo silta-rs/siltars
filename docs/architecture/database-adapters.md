@@ -70,7 +70,7 @@ It uses the official `clickhouse` crate over HTTP with RowBinary decoding into
 typed rows, mirrors the PostgreSQL rate routes under `/ch/*`, and exists to
 measure an analytical store next to the transactional one. It is not an
 adapter contract yet: routes are still mapped by symbolic handler name and
-there is no query plan. See `experiments/poc-001-pip-native-runtime/benchmark.md`
+there is no query plan. See `benchmarks/native-runtime/benchmark.md`
 for the seed and the comparison against FastAPI with `clickhouse-connect`.
 
 ## Kafka And Streams
@@ -115,7 +115,7 @@ Measured on the POC-001 compose database at one connection the request dropped
 from about two round trips to one (0.298 ms to 0.213 ms mean), and at fifty
 connections the one-row path gained between 13 and 49 percent depending on host
 load. The report is in
-`experiments/poc-001-pip-native-runtime/reports/pool-acquire-ping-2026-09-05/`.
+`benchmarks/RESULTS.md`.
 
 Pool sizing on that database: throughput scales with the pool up to about 50
 connections and stops there. A pool of 200 made p99 worse, and a cold pool with

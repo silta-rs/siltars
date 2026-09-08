@@ -247,4 +247,4 @@ The next technical stage is:
 Start with [POC-001: Python-defined, Rust-executed endpoint](docs/pocs/001-python-defined-rust-executed-endpoint.md).
 
 The corresponding experiment folder is
-[experiments/poc-001-pip-native-runtime](experiments/poc-001-pip-native-runtime/README.md).
+[benchmarks/native-runtime](benchmarks/native-runtime/README.md).

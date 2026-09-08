@@ -5,7 +5,7 @@ the native Rust hot path and enter Python only when application logic requires
 it.
 
 The project does not make production performance claims yet. POC benchmark
-snapshots may be checked into `experiments/` as engineering evidence, but they
+snapshots may be summarized in `benchmarks/RESULTS.md` as engineering evidence, but they
 must state their limitations and reproduction steps.
 
 ## Principles
@@ -33,7 +33,7 @@ hypotheses, not performance claims.
 | 6 | SQLite on a local file; read-heavy load; rollback journal and WAL profiles when writes are present | Reference data and edge-service configuration | No database network exchange makes this a separate application class. Tests must model SQLite's single writer and WAL checkpoint behavior; a native Silta adapter does not exist yet. See [SQLite WAL concurrency](https://www.sqlite.org/wal.html#concurrency). |
 
 MySQL remains a control workload. The existing
-[MySQL experiment](../../experiments/mysql-read-benchmark/README.md) already
+[MySQL experiment](../../benchmarks/mysql-read/README.md) already
 uses MySQL 8.4, a 1 GiB buffer pool, a warm 32-connection pool, and an optimized
 FastAPI baseline with `asyncmy`, prepared statements and direct ORJSON
 responses. Before expanding it, profile pool acquisition and acquire ping, then
@@ -42,7 +42,7 @@ replace fixed first-row reads with indexed filters and cursor pagination.
 ## Current Evidence
 
 The existing
-[ClickHouse alpha report](../../experiments/poc-001-pip-native-runtime/reports/clickhouse-alpha-2026-09-05/README.md)
+[ClickHouse alpha report](../../benchmarks/RESULTS.md)
 contains a result up to 5.14x for 1,000 rows. It is directional evidence only:
 the host was running other work, each point lasted six seconds and each point
 was measured once. It must not be presented as a prediction for a clean Linux
@@ -121,4 +121,4 @@ Benchmarks should document:
 - Statistical treatment of results.
 
 Runnable prototypes, raw samples and alpha reports live under
-[`experiments/`](../../experiments/).
+[`benchmarks/`](../../benchmarks/).
