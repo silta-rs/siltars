@@ -2,7 +2,12 @@
 # Mock catalog benchmark (serialization only), following docs/architecture/performance.md.
 # Profile 1, one core: Silta with 1 tokio thread vs FastAPI with 1 uvicorn worker
 #   (conventional response path and ORJSONResponse).
-# Profile 2, multi core: Silta with 10 tokio threads vs FastAPI ORJSON with 10 workers.
+# Profile 2, equal CPU budget: two cores per side, Silta with 2 tokio worker
+#   threads vs FastAPI ORJSON with 2 uvicorn workers. macOS has no taskset or
+#   cgroups, so the budget is set by the number of executors and the actual
+#   consumption is measured over each server's process tree, which lets the
+#   report show whether the budgets really were equal. Set WORKERS to compare
+#   another equal budget (4 vs 4, 10 vs 10).
 # Responses are compared by hash across servers before load (validation.txt).
 #
 # Usage, from experiments/poc-001-pip-native-runtime with the compose PostgreSQL up
@@ -14,7 +19,8 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd); cd "$HERE"
 BIN=${SILTA_RUNTIME_BIN:-$HERE/../../target/release/silta-runtime}
 PYV=${PYTHON:-$HERE/.venv/bin/python}
-OUT=${OUT:-$HERE/reports/mock-catalog-$(date +%F)}; DUR=${DUR:-30s}; RUNS=${RUNS:-3}; CONC=${CONC:-50}
+OUT=${OUT:-$HERE/results/mock-catalog-$(date +%F)}; DUR=${DUR:-30s}; RUNS=${RUNS:-3}; CONC=${CONC:-50}
+WORKERS=${WORKERS:-2}
 export DATABASE_URL=${DATABASE_URL:-postgresql://silta:silta@127.0.0.1:55432/silta_poc}
 mkdir -p "$OUT"; LOG=$OUT/progress.log
 say(){ echo "$(date +%H:%M:%S) $*" | tee -a "$LOG"; }
@@ -54,6 +60,7 @@ cat > "$OUT/config-one-core.json" <<EOF
    {"name": "silta-1thread", "url": "http://127.0.0.1:8621", "pid": $PID_silta1t}],
  "cells": [
    {"name": "mock-100", "path": "/mock/rates/100"},
+   {"name": "mock-100", "path": "/mock/rates/100"},
    {"name": "mock-1000", "path": "/mock/rates/1000"},
    {"name": "mock-3000", "path": "/mock/rates/3000"},
    {"name": "mock-10000", "path": "/mock/rates/10000"}]}
@@ -61,20 +68,20 @@ EOF
 run_profile "$OUT/config-one-core.json"
 cleanup; nap 3
 
-say "--- profile 2: multi core ---"
-start_silta silta10t 8631 10
-start_fastapi faorj10 8632 baselines.fastapi_db_app_orjson:app 10
+say "--- profile 2: equal CPU budget, $WORKERS per side ---"
+start_silta siltaN 8631 "$WORKERS"
+start_fastapi faorjN 8632 baselines.fastapi_db_app_orjson:app "$WORKERS"
 validate 8631 8632
-cat > "$OUT/config-multi-core.json" <<EOF
-{"output_dir": "$OUT/multi-core", "duration": "$DUR", "runs": $RUNS, "concurrency": $CONC,
+cat > "$OUT/config-equal-budget.json" <<EOF
+{"output_dir": "$OUT/equal-budget", "duration": "$DUR", "runs": $RUNS, "concurrency": $CONC,
  "targets": [
-   {"name": "fastapi-orjson-10workers", "url": "http://127.0.0.1:8632", "pid": $PID_faorj10},
-   {"name": "silta-10threads", "url": "http://127.0.0.1:8631", "pid": $PID_silta10t}],
+   {"name": "fastapi-orjson-${WORKERS}workers", "url": "http://127.0.0.1:8632", "pid": $PID_faorjN},
+   {"name": "silta-${WORKERS}threads", "url": "http://127.0.0.1:8631", "pid": $PID_siltaN}],
  "cells": [
    {"name": "mock-1000", "path": "/mock/rates/1000"},
    {"name": "mock-3000", "path": "/mock/rates/3000"},
    {"name": "mock-10000", "path": "/mock/rates/10000"}]}
 EOF
-run_profile "$OUT/config-multi-core.json"
+run_profile "$OUT/config-equal-budget.json"
 cleanup
 say "=== done, load $(uptime | sed 's/.*load averages://') ==="
