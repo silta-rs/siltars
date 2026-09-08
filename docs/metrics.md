@@ -192,7 +192,7 @@ stops the metrics listener and flushes/shuts down the metric provider. It can ad
 up to roughly six seconds to shutdown when export or scrapes are stalled, on top
 of the application drain period. No telemetry is guaranteed after SIGKILL.
 
-A reproducible local [overhead smoke comparison](../experiments/metrics-export/README.md)
+A reproducible local [overhead smoke comparison](../benchmarks/metrics-export/README.md)
 is included. It does not establish a production throughput limit or zero overhead.
 
 ## Example PromQL

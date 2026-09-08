@@ -17,7 +17,7 @@ Python developer experience
 Rust native runtime
 ```
 
-[Documentation](docs/README.md) | [Cookbook](docs/cookbook.md) | [Status](docs/status.md) | [Architecture](ARCHITECTURE.md) | [RFCs](rfcs/README.md) | [Experiments](experiments/README.md) | [Funding](FUNDING.md) | [License](LICENSING.md)
+[Documentation](docs/README.md) | [Cookbook](docs/cookbook.md) | [Status](docs/status.md) | [Architecture](docs/architecture/README.md) | [RFCs](rfcs/README.md) | [Benchmarks](benchmarks/README.md) | [Funding](docs/project/funding.md) | [License](docs/project/licensing.md)
 
 ## What Silta Is
 
@@ -117,69 +117,28 @@ PATCH   /users/{id}
 DELETE  /users/{id}
 ```
 
-## Benchmark Snapshot
+## Performance
 
-POC-001 currently contains a local Python 3.14 smoke/load-curve snapshot of the
-Silta native Rust runtime against a FastAPI baseline on the same reproducible
-PostgreSQL container. This is useful engineering signal, not a public
-performance claim.
+Measured, not claimed: every number comes from a reproducible runner under
+[`benchmarks/`](benchmarks/README.md), follows the written
+[methodology](docs/architecture/performance.md), and is engineering evidence
+from one laptop. Summary tables live in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
-![Silta vs FastAPI response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke/rates.svg)
+| Route, one core, c=50 | Silta vs FastAPI (ORJSONResponse) | Why |
+| --- | ---: | --- |
+| One PostgreSQL row | 1.2x | Both stacks wait on the same database round trip |
+| 100 PostgreSQL rows, 16 KB | 1.3x | Serialization starts to matter |
+| 3000 nested PostgreSQL rows, 800 KB | 1.4x | Docker network proxy caps both |
+| 1000 ClickHouse rows | 2.6x | RowBinary into structs, Serde out |
+| 100 in-memory rows, serialization only | 2.1x (2.5x vs Pydantic) | No database in the path |
+| `GET /ping` | about 4x | HTTP stack overhead only |
 
-Best local points from the current prototype smoke run:
-
-| Endpoint | Silta | FastAPI | Signal |
-| --- | ---: | ---: | --- |
-| `/ping` | 182,345 RPS | 40,878 RPS | Lower HTTP/runtime overhead |
-| `/rates/EUR/USD` | 13,655 RPS | 10,362 RPS | Native DB path leads in this run |
-| `/rates` | 7,023 RPS | 2,899 RPS | Larger JSON response favors Rust serialization |
-
-Important limitations: this fresh graph uses 5-second points and two runs per
-point; response bodies are not yet byte-for-byte identical; and the Python
-bridge path is not measured yet. The official benchmark bar is 30-second runs,
-repeated three times, with CPU/RSS/startup and full dependency versions
-recorded.
-
-See the full report and caveats in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-smoke/README.md).
-
-A separate alpha smoke test reduces the database payload to one PostgreSQL row
-and measures both read and write paths:
-
-![Silta vs FastAPI one-row response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha/load-curve.svg)
-
-| Method | Endpoint | Silta | FastAPI | Signal |
-| --- | --- | ---: | ---: | --- |
-| GET | `/setting` | 15,995 RPS | 12,946 RPS | One-row native read path leads in this run |
-| PATCH | `/setting` | 3,463 RPS | 3,568 RPS | Same-row writes are dominated by PostgreSQL update serialization |
-
-See the one-row alpha report in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-one-row-alpha/README.md).
-
-A second alpha smoke test stresses large JSON serialization with 3,000 nested
-PostgreSQL-backed records per response:
-
-![Silta vs FastAPI big JSON response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha/GET-rates-bulk.svg)
-
-| Endpoint | Silta | FastAPI | Signal |
-| --- | ---: | ---: | --- |
-| `/rates/bulk` | 350 RPS | 137 RPS | Large JSON read path favors Rust structs and Serde serialization in this run |
-
-See the big JSON alpha report in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-big-json-alpha/README.md).
-
-The first Rust -> Python -> Rust bridge smoke test measures a Python handler
-escape hatch behind the Rust HTTP runtime:
-
-![Silta bridge response time curve](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-bridge-alpha/POST-python-echo.svg)
-
-| Path | Silta | FastAPI | Signal |
-| --- | ---: | ---: | --- |
-| Native Rust `/echo` | 172,667 RPS | 28,758 RPS | Native Rust request/JSON path overhead |
-| Bridge `/python/echo` | 53,758 RPS | 27,748 RPS | First Rust -> Python -> Rust path is measurable |
-
-See the bridge alpha report in
-[experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-bridge-alpha](experiments/poc-001-pip-native-runtime/reports/load-curve-python-3-14-bridge-alpha/README.md).
+Across those routes the runtime spent about half the CPU per request of the
+FastAPI baseline and held a tenth of the memory of a ten-worker uvicorn
+deployment. Where the database is the ceiling the gain is modest; where JSON
+is the work it grows. Python `orjson` with prebuilt objects is the toughest
+baseline (1.6x on large bodies); routes that build objects per request pay
+what the conventional FastAPI path pays.
 
 ## Current Status
 
@@ -201,11 +160,7 @@ and immediate engineering focus.
 
 ## Alpha Milestone
 
-Silta should move from Pre-Alpha to Alpha when these criteria are met:
-
 See the canonical Alpha checklist in [ROADMAP.md](ROADMAP.md#alpha-milestone).
-- The project has a small example application that can be cloned, run, and
-  modified without Rust knowledge.
 
 ## Positioning
 
@@ -218,7 +173,7 @@ Python remains available as an explicit escape hatch for business logic.
 
 ## Architecture Documents
 
-- [ARCHITECTURE.md](ARCHITECTURE.md): system boundaries.
+- [docs/architecture/README.md](docs/architecture/README.md): system boundaries.
 - [docs/architecture/overview.md](docs/architecture/overview.md): Python
   control plane and Rust execution plane.
 - [docs/architecture/runtime.md](docs/architecture/runtime.md): runtime
@@ -231,8 +186,8 @@ Python remains available as an explicit escape hatch for business logic.
 Silta was originally conceived and initiated by
 [Serrka](https://github.com/Sergey2Gnezdilov/).
 
-See [AUTHORS.md](AUTHORS.md), [NOTICE](NOTICE), and
-[LICENSING.md](LICENSING.md).
+See [AUTHORS.md](docs/project/authors.md), [NOTICE](NOTICE), and
+[LICENSING.md](docs/project/licensing.md).
 
 ## License
 

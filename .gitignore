@@ -24,3 +24,7 @@ __pycache__/
 experiments/**/.venv/
 experiments/**/results/
 experiments/**/*.log
+
+# Benchmark output (raw oha JSON, CSV, charts) stays out of git; summaries go to benchmarks/RESULTS.md
+benchmarks/**/results/
+benchmarks/**/reports/

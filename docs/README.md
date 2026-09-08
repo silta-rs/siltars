@@ -20,18 +20,18 @@ Start here:
 - [Proofs of concept](pocs/README.md).
 - [POC-001: Python-defined, Rust-executed endpoint](pocs/001-python-defined-rust-executed-endpoint.md).
 - [Getting started](getting-started.md).
-- [Experiments](../experiments/README.md).
+- [Benchmarks and results](../benchmarks/README.md).
 
 Repository-level contracts:
 
-- [Manifesto](../MANIFESTO.md).
-- [Architecture](../ARCHITECTURE.md).
+- [Manifesto](project/manifesto.md).
+- [Architecture](architecture/README.md).
 - [Roadmap](../ROADMAP.md).
 - [RFC process](../rfcs/README.md).
-- [Funding](../FUNDING.md).
-- [Licensing policy](../LICENSING.md).
-- [Authors and project origin](../AUTHORS.md).
-- [Trademark policy](../TRADEMARKS.md).
+- [Funding](project/funding.md).
+- [Licensing policy](project/licensing.md).
+- [Authors and project origin](project/authors.md).
+- [Trademark policy](project/trademarks.md).
 
 Documentation should stay honest about current implementation state. Do not
 describe planned capabilities as available features.
