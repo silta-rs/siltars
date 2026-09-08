@@ -1,8 +1,0 @@
-{"output_dir": "<scratch>/mock-bench-2026-09-07/p2-multi-core", "duration": "30s", "runs": 3, "concurrency": 50,
- "targets": [
-   {"name": "fastapi-orjson-10workers", "url": "http://127.0.0.1:8632", "pid": 69178},
-   {"name": "silta-10threads", "url": "http://127.0.0.1:8631", "pid": 69166}],
- "cells": [
-   {"name": "mock-1000", "path": "/mock/rates/1000"},
-   {"name": "mock-3000", "path": "/mock/rates/3000"},
-   {"name": "mock-10000", "path": "/mock/rates/10000"}]}

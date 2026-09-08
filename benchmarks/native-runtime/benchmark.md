@@ -390,7 +390,7 @@ profile (Silta with one tokio thread against one uvicorn worker of each FastAPI
 configuration) and the multi-core profile (ten tokio threads against ten ORJSON
 workers), 30 s points, three runs with rotated target order.
 
-Results from 2026-09-07 are in `reports/mock-catalog-2026-09-07/`. On one core
+Results are summarized in [RESULTS.md](../RESULTS.md). On one core
 Silta served 100 rows at 2.05x the ORJSON baseline and 2.5x the conventional
 one, and 1000 to 10000 rows at 1.6x and 2.3 to 2.5x, at about half the CPU per
 request in every cell. With ten threads against ten workers the ratio was 1.65
